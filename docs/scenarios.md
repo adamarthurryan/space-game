@@ -1,0 +1,1 @@
+A generation ship arrives in a new system and enters orbit around its sun. The mothership as well as numerous smaller ships and probes are dispatched to explore the system and gather needed resources - either to create a colony or continue the voyage.
