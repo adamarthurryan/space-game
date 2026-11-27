@@ -87,3 +87,16 @@ describe('useMapKeys', () => {
     expect(useView.getState().snapRequest).toBeNull();
   });
 });
+
+describe('MapToolbar with a node selected (S4-10)', () => {
+  it('snaps to and focuses the node’s ship', async () => {
+    const n = useWorld.getState().addNode('ship-1', { t: 1000 });
+    if (!n.ok) throw new Error(n.error);
+    act(() => useView.getState().select({ kind: 'node', shipId: 'ship-1', id: n.value }));
+    render(<MapToolbar />);
+    const orbit = screen.getByRole('button', { name: /Orbit plane/ }) as HTMLButtonElement;
+    expect(orbit.disabled).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: /Focus/ }));
+    expect(useView.getState().focus).toEqual({ kind: 'ship', id: 'ship-1' });
+  });
+});

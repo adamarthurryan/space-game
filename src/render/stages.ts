@@ -8,7 +8,8 @@
 import type { BodyId } from '../sim/body';
 import type { EventRegistry } from '../sim/events';
 import { advanceWorld, type World } from '../sim/world';
-import type { MapObjectRef } from '../store/useView';
+import type { ShipId } from '../sim/ship';
+import type { FocusRef, MapObjectRef } from '../store/useView';
 import { syncFrameShips, updateFrameBodies, updateFrameShips, type MapFrame } from './mapFrame';
 import {
   measureLabels,
@@ -40,11 +41,13 @@ export type StageName = (typeof STAGES)[number];
 
 /** What the layers need of the view store, read once per frame. */
 export interface ViewSnapshot {
-  focus: MapObjectRef;
+  focus: FocusRef;
   selected: MapObjectRef | null;
   hovered: MapObjectRef | null;
   /** The body whose frame trajectories are drawn in (S3-16). */
   frameBodyId: BodyId;
+  /** The active ship, if it is coasting (S4-9). */
+  activeShipId: ShipId | null;
 }
 
 /** One kind of object on the map, as a plain three.js layer. */

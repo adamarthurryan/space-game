@@ -267,7 +267,7 @@ export function lastRevolutionWindow(
 /**
  * Writes float32(frameBodyWorld + p − origin) for the points after t, preceded by the ship's
  * current position (relative to the frame body) if given; returns the vertex count. `out` holds
- * at least 3 · MAX_VERTICES floats.
+ * at least 3 · MAX_VERTICES floats. `outTimes`, if given, gets each written vertex's time.
  */
 export function writeTrajectoryVertices(
   out: Float32Array,
@@ -276,6 +276,7 @@ export function writeTrajectoryVertices(
   shipRel: Vec3 | null,
   frameBodyWorld: Vec3,
   origin: Vec3,
+  outTimes?: Float64Array,
 ): number {
   const ox = frameBodyWorld.x - origin.x;
   const oy = frameBodyWorld.y - origin.y;
@@ -285,6 +286,7 @@ export function writeTrajectoryVertices(
     out[0] = ox + shipRel.x;
     out[1] = oy + shipRel.y;
     out[2] = oz + shipRel.z;
+    if (outTimes) outTimes[0] = t;
     n = 1;
   }
   for (let k = 0; k < line.count; k++) {
@@ -292,7 +294,31 @@ export function writeTrajectoryVertices(
     out[3 * n] = ox + line.points[3 * k]!;
     out[3 * n + 1] = oy + line.points[3 * k + 1]!;
     out[3 * n + 2] = oz + line.points[3 * k + 2]!;
+    if (outTimes) outTimes[n] = line.times[k]!;
     n++;
   }
   return n;
+}
+
+/**
+ * The index of the first segment after `t` that ends at a node: every later segment is the
+ * planned path, drawn dashed (S4-11). Infinity if no node is reached.
+ */
+export function firstNodeSegment(segments: readonly Segment[], t: number): number {
+  const i = segments.findIndex((s) => s.endEvent === 'maneuver' && s.tEnd > t);
+  return i < 0 ? Infinity : i;
+}
+
+/**
+ * The window of the current orbit after a node on it (S4-11): for a closed segment that ends at
+ * a node, from the node to one revolution after tFrom. Null otherwise.
+ */
+export function currentOrbitRestWindow(
+  seg: Segment,
+  g: ConicGeometry,
+  tFrom: number,
+): [number, number] | null {
+  if (g.kind !== 'elliptic' || seg.endEvent !== 'maneuver') return null;
+  const end = Math.max(tFrom, seg.tStart) + g.period;
+  return seg.tEnd < end ? [seg.tEnd, end] : null;
 }

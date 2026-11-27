@@ -91,8 +91,53 @@ function createProbes() {
           tEnd: s.tEnd,
           endEvent: s.endEvent,
           endTargetId: s.endTargetId ?? null,
+          endNodeId: s.endNodeId ?? null,
+          dvApplied: s.dvApplied ?? null,
         })),
       };
+    },
+    /** A ship's plan (S4-20): each node, whether it is reached, and the Δv applied there. */
+    plan(id: string) {
+      const world = useWorld.getState().world;
+      const ship = world.ships[id];
+      if (!ship) throw new Error(`unknown ship ${id}`);
+      const segs = world.derived.trajectories[id]?.segments ?? [];
+      return ship.plan.map((n) => {
+        const seg = segs.find((s) => s.endNodeId === n.id);
+        return { ...n, dv: { ...n.dv }, reached: !!seg, dvApplied: seg?.dvApplied ?? 0 };
+      });
+    },
+    /** A node glyph's screen position this frame, or null (S4-20). */
+    nodeScreen(nodeId: string) {
+      const n = frame().nodes.find((x) => x.nodeId === nodeId);
+      return n ? { x: n.x, y: n.y } : null;
+    },
+    /** The ghost node under the pointer, or null (S4-20). */
+    ghost() {
+      const g = frame().ghost;
+      return g ? { ...g } : null;
+    },
+    /** The active ship's drawn, projected path pieces: screen points and times (S4-20). */
+    activePath() {
+      return frame().paths.map((p) => ({
+        shipId: p.shipId,
+        segmentIndex: p.segmentIndex,
+        points: Array.from({ length: p.count }, (_, k) => ({
+          x: p.screen[2 * k]!,
+          y: p.screen[2 * k + 1]!,
+          t: p.times[k]!,
+        })),
+      }));
+    },
+    /** The active ship's ID, as the view has it (S4-20). */
+    activeShip() {
+      return useView.getState().activeShipId;
+    },
+    /** A ship's trajectory key and version, and the cache counters (S4-20). */
+    trajectoryKey(id: string) {
+      const d = useWorld.getState().world.derived;
+      const t = d.trajectories[id];
+      return { key: t?.key ?? null, version: t?.version ?? 0, cache: { ...d.cacheStats } };
     },
     /** The vertices drawn per segment of a ship's trajectory this frame. */
     trajectoryVertices(id: string) {

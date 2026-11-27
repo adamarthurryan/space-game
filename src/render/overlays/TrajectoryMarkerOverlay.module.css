@@ -37,3 +37,32 @@
   color: var(--color-text-dim);
   white-space: nowrap;
 }
+
+/* Maneuver nodes (S4-9): a diamond in the ship's colour; other ships' nodes smaller. */
+.node {
+  font-size: 13px;
+  line-height: 13px;
+  text-shadow: 0 0 2px #000;
+}
+
+.nodeOther {
+  font-size: 9px;
+  line-height: 9px;
+}
+
+.nodeDisabled {
+  opacity: 0.45;
+}
+
+.nodeSelected {
+  font-size: 16px;
+  line-height: 16px;
+  text-shadow:
+    0 0 2px #fff,
+    0 0 4px #000;
+}
+
+/* The ghost node (S4-12): hollow, under the pointer. */
+.ghost {
+  opacity: 0.85;
+}

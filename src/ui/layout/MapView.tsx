@@ -1,5 +1,5 @@
 import { Scene } from '../../render/Scene';
-import { formatDistance } from '../format';
+import { formatCountdown, formatDistance } from '../format';
 import { MapToolbar } from '../map/MapToolbar';
 import { useMapKeys } from '../useMapKeys';
 import styles from './MapView.module.css';
@@ -9,7 +9,7 @@ export function MapView() {
   useMapKeys();
   return (
     <main className={styles['map']} aria-label="System map">
-      <Scene formatDistance={formatDistance} />
+      <Scene formatDistance={formatDistance} formatCountdown={formatCountdown} />
       <MapToolbar />
     </main>
   );

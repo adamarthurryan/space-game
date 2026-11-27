@@ -8,7 +8,7 @@
 
 import { ACESFilmicToneMapping, Color, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import type { World } from '../sim/world';
-import { useView } from '../store/useView';
+import { resolveActiveShip, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { CameraStage } from './camera/CameraStage';
 import { registerDebug } from './debugHandle';
@@ -152,8 +152,14 @@ export class MapRenderer {
   }
 
   private readView(world: World): ViewSnapshot {
-    const { focus, selected, hovered } = useView.getState();
-    return { focus, selected, hovered, frameBodyId: frameBodyOf(world, focus) };
+    const { focus, selected, hovered, activeShipId } = useView.getState();
+    return {
+      focus,
+      selected,
+      hovered,
+      frameBodyId: frameBodyOf(world, focus),
+      activeShipId: resolveActiveShip(world, activeShipId),
+    };
   }
 
   /** One frame: every stage in order, then the draw. */
