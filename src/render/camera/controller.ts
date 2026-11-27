@@ -1,6 +1,7 @@
 /**
  * The camera controller (decisions S2-10 to S2-12 in planning/sprint-2.md). Pure TypeScript, no
- * three.js, so it's tested headlessly; `CameraRig.tsx` feeds it input and applies it each frame.
+ * three.js, so it's tested headlessly; `input/cameraInput.ts` feeds it input and
+ * `CameraStage.ts` applies it each frame.
  *
  * The camera orbits the scene origin at yaw and pitch about a reference pole, at a distance kept
  * as log10(km). Its orientation is built from the pole's basis, not with `lookAt`, so looking

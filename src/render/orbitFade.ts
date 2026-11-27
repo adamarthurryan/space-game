@@ -1,6 +1,6 @@
 /**
  * Orbit lines: their fading and buffer filling (decisions S2-8 and S2-9 in
- * planning/sprint-2.md). Pure, so it's tested headlessly; `OrbitLines.tsx` applies it each frame.
+ * planning/sprint-2.md). Pure, so it's tested headlessly; `layers/OrbitLayer.ts` applies it each frame.
  *
  * Each line's opacity is a base alpha × a screen-size fade (which hides moon orbits at system
  * zoom) × a per-vertex distance fade (which keeps distant outer orbits as faint context). The

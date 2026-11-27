@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../gen/scenario';
 import { norm, sub, vec3 } from '../math/vec3';
 import { bodyWorldState } from '../sim/body';
-import { createMapFrame, frameWorldInto, STAGE, updateFrameBodies } from './mapFrame';
+import { createMapFrame, frameWorldInto, updateFrameBodies } from './mapFrame';
 
 describe('MapFrame', () => {
   const { system } = createSandboxWorld();
@@ -34,18 +34,5 @@ describe('MapFrame', () => {
     const i = f.indexOf['moon']!;
     const p = frameWorldInto(f, i, vec3(0, 0, 0));
     expect(norm(sub(p, bodyWorldState(system, 'moon', t).r))).toBeLessThan(1e-6);
-  });
-
-  it('orders the stages clock < bodies < camera < projection < layers < labels, all ≤ 0', () => {
-    const p = [
-      STAGE.clock,
-      STAGE.bodies,
-      STAGE.camera,
-      STAGE.projection,
-      STAGE.layers,
-      STAGE.labels,
-    ];
-    expect([...p].sort((a, b) => a - b)).toEqual(p);
-    expect(Math.max(...p)).toBeLessThanOrEqual(0);
   });
 });
