@@ -17,8 +17,10 @@ import { attachPointerInput } from './input/pointerInput';
 import { BodyLayer } from './layers/BodyLayer';
 import { MarkerLayer } from './layers/MarkerLayer';
 import { OrbitLayer } from './layers/OrbitLayer';
+import { TrajectoryLayer } from './layers/TrajectoryLayer';
 import { frameBodyOf, type MapFrame } from './mapFrame';
 import type { LabelRegistry } from './overlays/labelLayout';
+import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 import {
   bodiesStage,
   clockStage,
@@ -57,10 +59,17 @@ export class MapRenderer {
   private view: ViewSnapshot;
 
   private readonly labels: LabelRegistry;
+  private readonly markers: TrajectoryMarkerRegistry;
 
-  constructor(container: HTMLElement, frame: MapFrame, labels: LabelRegistry) {
+  constructor(
+    container: HTMLElement,
+    frame: MapFrame,
+    labels: LabelRegistry,
+    markers: TrajectoryMarkerRegistry,
+  ) {
     this.frame = frame;
     this.labels = labels;
+    this.markers = markers;
     const world = useWorld.getState().world;
 
     this.renderer = new WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
@@ -73,10 +82,12 @@ export class MapRenderer {
     this.scene.background = new Color(BACKGROUND);
 
     this.cameraStage = new CameraStage(this.camera, frame);
+    const trajectories = new TrajectoryLayer(this.scene);
     // Layers draw in this order, so markers come last.
     this.layers = [
       new BodyLayer(this.scene, frame, world.system),
       new OrbitLayer(this.scene, frame, world.system),
+      trajectories,
       new MarkerLayer(this.scene, frame, world.system),
     ];
     for (const l of this.layers) l.sync?.(world);
@@ -101,6 +112,8 @@ export class MapRenderer {
 
     registerDebug('frame', frame);
     registerDebug('controller', this.cameraStage.controller);
+    registerDebug('trajectories', trajectories);
+    registerDebug('markers', markers);
   }
 
   /** Starts the loop. */
@@ -175,7 +188,7 @@ export class MapRenderer {
         for (const l of this.layers) l.update(frame, this.view);
         return;
       case 'labels':
-        labelsStage(this.labels, frame, world, this.view);
+        labelsStage(this.labels, this.markers, frame, world, this.view);
         return;
     }
   }

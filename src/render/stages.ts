@@ -17,6 +17,10 @@ import {
   updateShipLabelCandidates,
   type LabelRegistry,
 } from './overlays/labelLayout';
+import {
+  placeTrajectoryMarkers,
+  type TrajectoryMarkerRegistry,
+} from './overlays/trajectoryMarkerLayout';
 import { projectFrame } from './projection';
 
 /**
@@ -78,9 +82,13 @@ export function projectionStage(frame: MapFrame, world: World, view: ViewSnapsho
   projectFrame(frame, world.system, view);
 }
 
-/** Labels stage: candidates, declutter, and the span positions (S2-15). */
+/**
+ * Labels stage: candidates, declutter, and the span positions (S2-15); then the trajectory
+ * markers, whose texts give way to the labels (S3-19).
+ */
 export function labelsStage(
   reg: LabelRegistry,
+  markers: TrajectoryMarkerRegistry,
   frame: MapFrame,
   world: World,
   view: ViewSnapshot,
@@ -89,4 +97,5 @@ export function labelsStage(
   updateLabelCandidates(reg, frame, world.system, view);
   updateShipLabelCandidates(reg, frame, world, view);
   placeLabels(reg, frame);
+  placeTrajectoryMarkers(markers, frame, world, view);
 }

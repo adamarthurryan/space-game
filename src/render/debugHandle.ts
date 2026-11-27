@@ -8,11 +8,15 @@ import { meanOrbitNormal } from '../orbital/propagate';
 import { useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { controllerPose, type CameraController } from './camera/controller';
+import type { TrajectoryLayer } from './layers/TrajectoryLayer';
 import type { MapFrame } from './mapFrame';
+import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 
 interface DebugSources {
   frame?: MapFrame;
   controller?: CameraController;
+  trajectories?: TrajectoryLayer;
+  markers?: TrajectoryMarkerRegistry;
 }
 
 const sources: DebugSources = {};
@@ -72,6 +76,31 @@ function createProbes() {
         marker: fs.markerShown[k] === 1,
         merged: fs.merged[k] === 1,
       };
+    },
+    /** A ship's trajectory segments and status (S3-22). */
+    trajectory(id: string) {
+      const world = useWorld.getState().world;
+      const ship = world.ships[id];
+      if (!ship) throw new Error(`unknown ship ${id}`);
+      const traj = world.derived.trajectories[id];
+      return {
+        status: ship.status,
+        segments: (traj?.segments ?? []).map((s) => ({
+          parentId: s.parentId,
+          tStart: s.tStart,
+          tEnd: s.tEnd,
+          endEvent: s.endEvent,
+          endTargetId: s.endTargetId ?? null,
+        })),
+      };
+    },
+    /** The vertices drawn per segment of a ship's trajectory this frame. */
+    trajectoryVertices(id: string) {
+      return sources.trajectories?.vertexCounts.get(id) ?? [];
+    },
+    /** The trajectory markers placed this frame. */
+    trajectoryMarkers() {
+      return sources.markers?.placed ?? [];
     },
     /** Every ship's ID, name and status. */
     ships() {
