@@ -152,7 +152,9 @@ export class MapRenderer {
     const frame = this.frame;
     switch (stage) {
       case 'clock':
-        clockStage(world, this.dtWall);
+        if (clockStage(world, this.dtWall, useWorld.getState().events)) {
+          useWorld.getState().bumpVersion();
+        }
         return;
       case 'bodies':
         bodiesStage(frame, world);

@@ -1,41 +1,58 @@
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createSandboxWorld } from '../gen/scenario';
-import { setPaused, setWarpIndex, warpDown, warpUp } from '../sim/clock';
+import * as actions from '../game/actions';
+import type { ActionResult, SpawnShipParams } from '../game/actions';
+import { createEventRegistry, registerShipHandlers, type EventRegistry } from '../sim/events';
+import type { ShipId } from '../sim/ship';
 import type { World } from '../sim/world';
 
 /**
- * The world and its version (decision S2-17 in planning/sprint-2.md).
+ * The world and its version (decisions S2-17 and S3-12).
  *
- * The world is mutated in place: the clock stage advances `world.clock.t` every frame without
- * touching the store. Actions that change the world bump `version`, and panels subscribe to
- * `version`. Readouts that follow `t` use `useSimTime` instead. Sprint 3 decides whether these
- * actions go through `game/actions.ts`.
+ * The world is mutated in place: the clock stage advances it every frame without touching the
+ * store. Player actions go through `game/actions.ts`; the store calls them and bumps `version`
+ * on success, and panels subscribe to `version`. The clock stage bumps it too when it handled
+ * events. Readouts that follow `t` use `useSimTime` instead.
  */
 interface WorldState {
   /** Mutated in place by the clock; never replaced except on reset. */
   world: World;
-  /** Bumped by every action. */
+  /** Bumped by every successful action, and by frames that handled events. */
   version: number;
-  togglePause(): void;
-  warpUp(): void;
-  warpDown(): void;
-  setWarpIndex(i: number): void;
+  /** The sim event handlers (S3-9). */
+  events: EventRegistry;
+  bumpVersion(): void;
+  togglePause(): ActionResult;
+  warpUp(): ActionResult;
+  warpDown(): ActionResult;
+  setWarpIndex(i: number): ActionResult;
+  spawnShip(p: SpawnShipParams): ActionResult<ShipId>;
+}
+
+function createRegistry(): EventRegistry {
+  const reg = createEventRegistry();
+  registerShipHandlers(reg);
+  return reg;
 }
 
 export const useWorld = create<WorldState>()((set, get) => {
-  /** Applies a mutation to the world and bumps the version. */
-  const act = (f: (w: World) => void) => {
-    f(get().world);
-    set((s) => ({ version: s.version + 1 }));
+  /** Runs an action on the world, and bumps the version if it succeeded. */
+  const act = <T>(f: (w: World) => ActionResult<T>): ActionResult<T> => {
+    const result = f(get().world);
+    if (result.ok) set((s) => ({ version: s.version + 1 }));
+    return result;
   };
   return {
     world: createSandboxWorld(),
     version: 0,
-    togglePause: () => act((w) => setPaused(w.clock, !w.clock.paused)),
-    warpUp: () => act((w) => warpUp(w.clock)),
-    warpDown: () => act((w) => warpDown(w.clock)),
-    setWarpIndex: (i) => act((w) => setWarpIndex(w.clock, i)),
+    events: createRegistry(),
+    bumpVersion: () => set((s) => ({ version: s.version + 1 })),
+    togglePause: () => act(actions.togglePause),
+    warpUp: () => act(actions.warpUp),
+    warpDown: () => act(actions.warpDown),
+    setWarpIndex: (i) => act((w) => actions.setWarpIndex(w, i)),
+    spawnShip: (p) => act((w) => actions.spawnShip(w, p)),
   };
 });
 

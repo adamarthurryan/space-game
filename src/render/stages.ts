@@ -6,8 +6,8 @@
  */
 
 import type { BodyId } from '../sim/body';
-import { advanceClock } from '../sim/clock';
-import type { World } from '../sim/world';
+import type { EventRegistry } from '../sim/events';
+import { advanceWorld, type World } from '../sim/world';
 import type { MapObjectRef } from '../store/useView';
 import { updateFrameBodies, type MapFrame } from './mapFrame';
 import {
@@ -50,9 +50,12 @@ export interface MapLayer {
   dispose(): void;
 }
 
-/** Clock stage: advances the sim clock by a frame of wall time. */
-export function clockStage(world: World, dtWall: number): void {
-  advanceClock(world.clock, dtWall);
+/**
+ * Clock stage: advances the world by a frame of wall time, stopping at every sim event on the
+ * way (S3-9). Returns whether any event was handled, so the caller can bump the store version.
+ */
+export function clockStage(world: World, dtWall: number, events: EventRegistry): boolean {
+  return advanceWorld(world, dtWall, events).events > 0;
 }
 
 /** Bodies stage: every body's world position at the new t. */
