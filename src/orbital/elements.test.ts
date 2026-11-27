@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRng, next, range, type Rng } from '../math/rng';
 import { DEG } from '../math/units';
-import { norm, normalize, scale, vec3, type Vec3 } from '../math/vec3';
+import { norm, normalize, scale, sub, vec3, type Vec3 } from '../math/vec3';
 import {
   apoapsis,
   conicKind,
@@ -101,6 +101,8 @@ describe('textbook cases', () => {
 describe('round trips', () => {
   it('state → elements → state for 10,000 random states', () => {
     const rng = createRng('elements-round-trip');
+    let worst = 0;
+    let nonFinite = 0;
     for (let k = 0; k < 10_000; k++) {
       const rMag = 10 ** range(rng, 3.8, 6);
       const vEsc = Math.sqrt((2 * MU_CURTIS) / rMag);
@@ -112,9 +114,17 @@ describe('round trips', () => {
         v: scale(randomUnit(rng), vEsc * factor),
       };
       const el = elementsFromState(MU_CURTIS, s);
-      expectFinite(el);
-      expectStateClose(stateFromElements(MU_CURTIS, el), s, 1e-10);
+      if (!Object.values(el).every(Number.isFinite)) nonFinite++;
+      const back = stateFromElements(MU_CURTIS, el);
+      worst = Math.max(
+        worst,
+        norm(sub(back.r, s.r)) / norm(s.r),
+        norm(sub(back.v, s.v)) / norm(s.v),
+      );
     }
+    // Asserted once, not per state: 60,000 expect calls are slow enough to time out.
+    expect(nonFinite).toBe(0);
+    expect(worst).toBeLessThan(1e-10);
   });
 });
 

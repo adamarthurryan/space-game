@@ -159,7 +159,10 @@ export function validateBodySystem(sys: BodySystem): string[] {
     if (o) {
       if (!(o.e >= 0 && o.e < 1)) errors.push(`${name}: e must be in [0, 1), got ${o.e}`);
       if (!(o.a > 0)) errors.push(`${name}: a must be positive, got ${o.a}`);
-      if (!(o.meanMotion > 0)) errors.push(`${name}: n must be positive, got ${o.meanMotion}`);
+      // n < 0 is allowed: a fitted apsidal rate can exceed the mean longitude rate (S1-18).
+      if (!(o.meanMotion !== 0 && Number.isFinite(o.meanMotion))) {
+        errors.push(`${name}: n must be finite and non-zero, got ${o.meanMotion}`);
+      }
       if (parent) {
         const pe = o.a * (1 - o.e);
         const ap = o.a * (1 + o.e);

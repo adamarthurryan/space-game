@@ -174,13 +174,26 @@ export const engines = [
 - **Camera-relative rendering:** the GPU is float32. So every frame, positions minus the camera focus position are computed in float64, _then_ converted to float32. Orbit and trajectory polylines are generated in the focus body's frame and re-based when focus changes.
 - **Display scale:** bodies are drawn at true size when close, with a minimum screen-space size. Zoom is logarithmic. Minor bodies use instanced rendering, and their orbit lines are only drawn on demand.
 
+**Rendering conventions** (R3F is a thin shell; see decision 53):
+
+- JSX only decides **which objects exist**: keyed by ID, from world and view selectors. Per-frame state (positions, camera-relative offsets, scales, fades) is set through refs in `useFrame`, never through props.
+- One `useFrame` **per layer** (all bodies, all trajectories), iterating the world, rather than one per object.
+- The sim clock ticks in a single `useFrame` that runs before all render updates.
+- **Picking is screen-space** (`render/picking.ts`): project lines, points and labels and take the nearest within a pixel radius. R3F pointer events are used only for real meshes, such as gizmo handles and body spheres.
+- **Labels are a custom overlay** with priority decluttering, not drei `<Html>`. drei is added only for specific helpers that are needed.
+
 ## Celestial bodies
 
-- A **body tree**: star → planets → moons. Each non-root body has Keplerian elements relative to its parent, plus `mu`, radius, and SOI radius (Laplace: `a·(m/M)^(2/5)`).
-- **Major vs. minor:** a body below a mass threshold is **minor**. Minor bodies have no SOI, so patched-conic frame switches never involve them. They are treated as rendezvous targets, like ships. This keeps SOI checks cheap with hundreds of asteroids.
-- **Position at `t`:** mean anomaly → Kepler's equation (Newton's method) → state vector in the parent frame. World position = the sum up the tree. There is no n-body perturbation.
+- **World frame:** heliocentric, ecliptic and mean equinox of J2000 (the frame Horizons calls "ecliptic"). The Sun is the root, fixed at the origin. Every body frame is non-rotating and parallel to the world frame, so changing frame is a translation of position and velocity (decision 54).
+- **Time:** sim time `t` is TDB seconds from the scenario epoch, which is stored as a Julian date (`epochJd`). There is no UTC (decision 55).
+- A **body tree**: star → planets → moons (`sim/body.ts`). A body stores `mu` (GM, not mass), its mean radius, an atmosphere height, its orbit relative to its parent, and its spin pole and prime meridian. `buildBodySystem` derives `major`, `soiRadius` (Laplace: `a·(m/M)^(2/5)`) and `childIds` once and stores them, so a `BodySystem` is plain, self-contained data (decisions 62, 63, 69).
+- **Major vs. minor:** a body under 10¹⁹ kg is **minor**. Minor bodies have no SOI, so patched-conic frame switches never involve them. They are treated as rendezvous targets, like ships. This keeps SOI checks cheap with hundreds of asteroids (decision 61).
+- **Orbits on rails:** a body's orbit is a set of **mean elements**: elliptic elements at `t = 0`, a mean motion `n` and optional linear rates for `a`, `e`, `i`, `Ω` and `ω`, relative to a reference plane given by its pole (the ecliptic if absent). The state at `t` comes from the elements at `t` through Kepler's equation (Newton's method). Its velocity uses `μ_eff = n²a³` plus the rates' contributions, so it is the derivative of the position (decisions 58, 59).
+- **Position at `t`:** world position = the sum up the tree. A state is moved between body frames through their **lowest common ancestor**, so Earth ↔ Moon never touches heliocentric magnitudes. There is no n-body perturbation (decision 64).
+- **Ship orbits** are propagated with universal variables, for any conic (decision 65). `orbital/elements.ts` converts between state vectors and elements that use the semi-latus rectum and the true anomaly, so one type covers ellipses, parabolas and hyperbolas (decision 66).
 - **Lagrange points** (`orbital/lagrange.ts`) are computed geometrically per star–planet and planet–moon pair. An object "at an L-point" is placed on rails at that position, with station-keeping assumed. Patched conics can't reproduce the dynamics of Lagrange points.
-- **Real-system data:** the JPL "Keplerian Elements for Approximate Positions of the Major Planets" table, published mean elements for major moons, and a sample of numbered asteroids.
+- **Real-system data** (`gen/realSystem.ts`, for epochs from 3000 BC to 3000 AD): the planets from JPL's "Keplerian Elements for Approximate Positions of the Major Planets", Tables 2a/2b, evaluated at the epoch (decision 56). Earth sits on the Earth–Moon barycentre's orbit, about 4,700 km from the true Earth, and the Moon orbits Earth (decision 57). Moons come from JPL's planetary satellite mean elements, used as given (decision 71). Physical data and spin come from JPL, DE440 and the IAU (decisions 62, 69). The source tables are typed data files in `gen/data/`, transcribed verbatim in their own units (decision 68). A sample of numbered asteroids arrives in sprint 8.
+- **Accuracy is not a goal:** the game needs a plausible solar system, not an ephemeris. Comparisons with Horizons catch implementation errors, and some moons drift from their real positions (decisions 60, 70, 71).
 
 ## Ships, stations and stacks
 

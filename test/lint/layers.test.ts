@@ -94,6 +94,42 @@ const cases: Case[] = [
     code: 'export const x = Math.random();\n',
     expected: [],
   },
+  // Sprint 1: the layers below sim (planning/sprint-1.md, "Lint rules").
+  {
+    file: 'src/orbital/bad.ts',
+    code: "import { getBody } from '../sim/body';\nexport const x = getBody;\n",
+    target: '../sim/body',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/sim/bad.ts',
+    code: "import { generateRealSystem } from '../gen/realSystem';\nexport const x = generateRealSystem;\n",
+    target: '../gen/realSystem',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/orbital/bad.ts',
+    code: 'export const x = Math.random();\n',
+    expected: [RESTRICTED_PROPERTY],
+  },
+  {
+    file: 'src/sim/ok.ts',
+    code: "import { propagate } from '../orbital/propagate';\nexport const x = propagate;\n",
+    target: '../orbital/propagate',
+    expected: [],
+  },
+  {
+    file: 'src/gen/ok.ts',
+    code: "import { buildBodySystem } from '../sim/body';\nexport const x = buildBodySystem;\n",
+    target: '../sim/body',
+    expected: [],
+  },
+  {
+    file: 'src/orbital/ok.ts',
+    code: "import { brent } from '../math/roots';\nexport const x = brent;\n",
+    target: '../math/roots',
+    expected: [],
+  },
   {
     file: 'src/misc/bad.ts',
     code: 'export const x = 1;\n',
@@ -101,7 +137,8 @@ const cases: Case[] = [
   },
 ];
 
-describe('layer and determinism lint rules', () => {
+// The first case cold-starts ESLint, which can pass 5 s while the other test files run.
+describe('layer and determinism lint rules', { timeout: 30_000 }, () => {
   for (const c of cases) {
     const firstLine = c.code.split('\n')[0];
     const verdict = c.expected.length ? c.expected.join(', ') : 'no errors';

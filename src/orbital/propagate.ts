@@ -4,7 +4,7 @@
  */
 
 import { TWO_PI, wrapPi, wrapTwoPi } from '../math/units';
-import { addScaled, cross, type Vec3 } from '../math/vec3';
+import { addScaled, cross, rotateX, rotateZ, type Vec3 } from '../math/vec3';
 import { stateFromElements, type MeanElements, type StateVector } from './elements';
 import { planeToEcliptic } from './frames';
 import { solveKeplerElliptic, solveUniversal, trueFromEccentric } from './kepler';
@@ -95,18 +95,40 @@ export function meanElementsAt(m: MeanElements, t: number): MeanElements {
  * State at t relative to the parent, in world (ecliptic) axes, with the plane rotation applied.
  *
  * The Keplerian part of the velocity uses μ_eff = n²a³, so it matches the motion in M. The
- * rotation of the orbit by the rates of Ω, i and ω is added to it: for the Moon, the apsidal
- * and nodal motion is about 1% of the orbital speed. The velocity terms from the rates of a and
- * e are left out; they are many orders of magnitude smaller.
+ * rates' contributions are added to it, so that the velocity is the derivative of the position:
+ * the rotation of the orbit by Ω̇, i̇ and ω̇ (for the Moon, about 1% of its orbital speed), and
+ * the change of shape by ȧ and ė at fixed M (for Jupiter, ė is 3e-6 of its speed).
+ *
+ * n may be negative: M then decreases and the body moves backwards along the ellipse, so the
+ * Keplerian velocity is reversed. This happens when a fitted apsidal rate exceeds the mean
+ * longitude rate, as for Tethys in JPL's table (S1-18).
  */
 export function stateFromMeanElements(m: MeanElements, t: number): StateVector {
   const el = meanElementsAt(m, t);
   const { a, e, i, lan, argp } = el;
   const muEff = m.meanMotion * m.meanMotion * a * a * a;
-  const nu = wrapPi(trueFromEccentric(wrapPi(solveKeplerElliptic(el.meanAnomaly, e)), e));
+  const E = wrapPi(solveKeplerElliptic(el.meanAnomaly, e));
+  const nu = wrapPi(trueFromEccentric(E, e));
   const s = stateFromElements(muEff, { p: a * (1 - e * e), e, i, lan, argp, nu });
+  if (m.meanMotion < 0) s.v = { x: -s.v.x, y: -s.v.y, z: -s.v.z };
 
   const rates = m.rates;
+  if (rates && (rates.a || rates.e)) {
+    // dr/dt from the change of shape at fixed M. In the perifocal frame
+    // r = (a(cos E − e), a√(1 − e²) sin E), with ∂E/∂e = sin E / (1 − e cos E).
+    const sinE = Math.sin(E);
+    const cosE = Math.cos(E);
+    const root = Math.sqrt(1 - e * e);
+    const dEde = sinE / (1 - e * cosE);
+    const drde: Vec3 = {
+      x: a * (-sinE * dEde - 1),
+      y: a * ((-e / root) * sinE + root * cosE * dEde),
+      z: 0,
+    };
+    let v = addScaled(s.v, s.r, (rates.a ?? 0) / a);
+    if (rates.e) v = addScaled(v, rotateZ(rotateX(rotateZ(drde, argp), i), lan), rates.e);
+    s.v = v;
+  }
   if (rates && (rates.lan || rates.i || rates.argp)) {
     // dr/dt from rotating the orbit: Ω̇ about the plane's pole, i̇ about the node line and
     // ω̇ about the orbit normal.

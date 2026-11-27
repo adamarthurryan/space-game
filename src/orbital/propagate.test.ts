@@ -301,6 +301,31 @@ describe('mean elements', () => {
     }
   });
 
+  it('includes the rates of a and e in the velocity', () => {
+    // Large enough that leaving the terms out would miss 1e-6 by orders of magnitude.
+    const m: MeanElements = { ...withRates, rates: { ...withRates.rates, a: 1e-2, e: 3e-9 } };
+    for (const t of [0, 2.5e5, 1e6]) {
+      const numeric = scale(
+        sub(stateFromMeanElements(m, t + 1).r, stateFromMeanElements(m, t - 1).r),
+        0.5,
+      );
+      const v = stateFromMeanElements(m, t).v;
+      expect(norm(sub(v, numeric)) / norm(v)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('moves backwards along the ellipse when n < 0 (as Tethys does, S1-18)', () => {
+    const m: MeanElements = { ...withRates, meanMotion: -base.meanMotion };
+    for (const t of [0, 3e5]) {
+      const numeric = scale(
+        sub(stateFromMeanElements(m, t + 1).r, stateFromMeanElements(m, t - 1).r),
+        0.5,
+      );
+      const v = stateFromMeanElements(m, t).v;
+      expect(norm(sub(v, numeric)) / norm(v)).toBeLessThan(1e-6);
+    }
+  });
+
   it('applies the reference plane as a rotation', () => {
     const local = stateFromMeanElements(base, 1e6);
     const rotated = stateFromMeanElements({ ...base, plane }, 1e6);

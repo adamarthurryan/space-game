@@ -1,6 +1,6 @@
 # Current Status
 
-Implementation has started. Milestone 1, sprint 0 (foundations) is complete: the toolchain, the lint-enforced layer rules, the `math/` layer, and the app shell with an empty 3D canvas. See `planning/milestone-1-sprints.md` for the next sprints.
+Milestone 1, sprints 0 and 1 are complete. Sprint 0 (foundations): the toolchain, the lint-enforced layer rules, the `math/` layer, and the app shell with an empty 3D canvas. Sprint 1 (orbital math and the real solar system, headless): `math/time.ts`, the `orbital/` layer (Kepler, elements, propagation, frames, SOI), `sim/body.ts` (the body tree), and `gen/realSystem.ts` with its JPL data in `gen/data/` and a pinned Horizons fixture in `gen/fixtures/`. Nothing new is visible yet; the map is sprint 2. See `planning/milestone-1-sprints.md` for the next sprints.
 
 # Scripts
 

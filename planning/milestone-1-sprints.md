@@ -45,6 +45,8 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 - `render/camera/`: orbit controls around a focus object, logarithmic zoom, animated refocus, snapping to the ecliptic or the selected body's plane.
 - A simple clock: pause, warp steps ×1 … ×10⁷, date readout. (It becomes `sim/clock.ts` with the event queue in sprint 3.)
 - The System tab (body tree), click to select, double-click to focus. A minimal body inspector (physical data, elements, SOI radius).
+- `render/picking.ts`: screen-space picking of bodies and labels. `render/overlays/`: the label overlay, decluttered by priority. Both follow the rendering conventions in [architecture.md](../docs/architecture.md#units-precision-and-rendering-scale).
+- **R3F review** (decision 53): at the end of the sprint, check how much of `render/` uses JSX for more than which objects exist. If it is mostly refs and imperative code, plan the switch to plain three.js for sprint 3.
 
 **Done when:** you can zoom from low Earth orbit to the whole system in a few scroll steps without jitter, focus Jupiter's moons, snap to a plane, and warp a year in a few seconds.
 
