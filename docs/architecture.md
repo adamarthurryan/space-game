@@ -1,167 +1,261 @@
 # System Architecture
 
-Status: draft proposal. Items marked **[Decision]** need sign-off; **[Open]** are unresolved.
+This document covers how the game is built. What the game does is in [features.md](features.md), the build order is in [milestones.md](milestones.md), and open questions and decisions are in [decisions.md](decisions.md).
 
-## Goals and constraints
+## Technical constraints
 
-- Purely client-side, browser-based. TypeScript, Three.js, React Three Fiber (R3F).
-- The simulation must be **deterministic**: same seed + same player inputs ⇒ same outcome. This enables save/load as (seed, input log), replays, and reproducible bugs.
-- The physics core must be **independent of rendering**, so it can be unit-tested headlessly and moved to a Web Worker if needed.
-- Physically plausible: two-body "on-rails" orbits for celestial bodies, patched conics for ships, realistic propulsion (see [worldbuilding.md](worldbuilding.md)).
+- Purely client-side, browser-based. TypeScript, Three.js, React Three Fiber (R3F). Desktop browsers, with mouse and keyboard.
+- **Determinism:** same seed + same player inputs ⇒ same outcome on the same browser engine. Inputs are timestamped in sim time, not wall time. `Math.sin`, `Math.exp` and similar functions are not guaranteed to give bit-identical results across JS engines, so saves store full world snapshots and don't rely on replaying inputs.
+- **The simulation is independent of rendering.** It can be unit-tested headlessly, and it runs in a Web Worker.
+- **Scale:** the late game has hundreds of bodies, tens to hundreds of ships, and dozens of stations, at time warps up to ×10⁷. Anything that runs per object per frame must be cheap. Ongoing processes (production, consumption, dose) are solved analytically between events, not stepped every tick.
 
 ## Layered structure
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ ui/        React DOM: panels, inspectors, timeline, menus │
-│ render/    R3F scene: bodies, orbits, trajectories, nodes │
-├──────────────────────────────────────────────────────────┤
-│ store/     App state (zustand): selection, camera, filters│
-│            + bridge to sim (current time, game state)     │
-├──────────────────────────────────────────────────────────┤
-│ game/      Roguelike rules: missions, resources, events,  │
-│            fog of war, win/lose                           │
-│ gen/       Seeded scenario & system generation            │
-├──────────────────────────────────────────────────────────┤
-│ sim/       Simulation: clock, bodies, ships, trajectories,│
-│            maneuver nodes, event detection                │
-│ orbital/   Pure math: Kepler, state vectors, SOI, Lambert │
-│ math/      Vec3 (float64), units, root finding, PRNG      │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ ui/         React DOM: panels, inspectors, timeline, screens  │
+│ render/     R3F scene: bodies, orbits, trajectories, overlays │
+├──────────────────────────────────────────────────────────────┤
+│ store/      App state (zustand) + bridge to the sim worker    │
+├──────────────────────────────────────────────────────────────┤
+│ game/       Scenario rules, progression & unlocks, win/lose   │
+│ gen/        Seeded system & scenario generation               │
+├──────────────────────────────────────────────────────────────┤
+│ economy/    Stockpiles, facilities, production, construction, │
+│             crew & population, logistics routes               │
+│ knowledge/  Survey: detection, orbit determination, assays    │
+├──────────────────────────────────────────────────────────────┤
+│ planning/   Maneuver planning tools (impulsive & low-thrust)  │
+│ sim/        Clock, event queue, bodies, ships, stations,      │
+│             trajectories, nodes, thrust arcs, environment     │
+│ orbital/    Pure math: Kepler, SOI, Lambert, integrators      │
+│ math/       Vec3 (float64), units, root finding, PRNG         │
+└──────────────────────────────────────────────────────────────┘
+  content/    Typed data tables: resources, modules, engines,
+              shielding, structures, recipes, unlock conditions
 ```
 
-Dependency rule: each layer imports only from layers below it. `math`, `orbital`, `sim`, `gen` and `game` must not import React or Three.js.
+- **Dependency rule:** each layer imports only from layers below it. Everything except `ui/`, `render/` and `store/` must not import React or Three.js. ESLint import rules enforce this.
+- **Content as data:** resources, modules, engines, shielding, structures, recipes and unlock conditions are typed tables in `content/`. Any layer may import them. Balancing means editing data, not code.
 
-Proposed source layout:
+Source layout:
 
 ```
 src/
-  math/       vec3.ts, units.ts, roots.ts, rng.ts
-  orbital/    elements.ts, kepler.ts, propagate.ts, soi.ts, lambert.ts, frames.ts
-  sim/        clock.ts, body.ts, ship.ts, trajectory.ts, maneuver.ts, events.ts, world.ts
-  gen/        realSystem.ts, fictionalSystem.ts, scenario.ts
-  game/       resources.ts, missions.ts, survey.ts, rules.ts
-  store/      useWorld.ts, useView.ts
-  render/     Scene.tsx, BodyMesh.tsx, OrbitLine.tsx, TrajectoryLine.tsx, NodeGizmo.tsx, camera/
-  ui/         layout/, panels/, timeline/, planner/
+  math/       vec3.ts, units.ts, roots.ts, rng.ts, pqueue.ts
+  orbital/    elements.ts, kepler.ts, propagate.ts, soi.ts, lambert.ts, frames.ts,
+              approach.ts, integrate.ts, lagrange.ts
+  sim/        clock.ts, events.ts, body.ts, ship.ts, station.ts, fleet.ts,
+              trajectory.ts, maneuver.ts, thrustArc.ts, proximity.ts, alarms.ts,
+              environment/ (radiation.ts, solar.ts), world.ts
+  planning/   basic.ts, plane.ts, transfer.ts, rendezvous.ts, lowThrust.ts, program.ts
+  knowledge/  detection.ts, orbitDetermination.ts, assay.ts
+  economy/    stockpile.ts, facility.ts, rates.ts, construction.ts, crew.ts, routes.ts
+  game/       progression.ts, unlocks.ts, scenario.ts, rules.ts
+  gen/        realSystem.ts, fictionalSystem.ts, composition.ts, scenario.ts
+  content/    resources.ts, modules.ts, engines.ts, shielding.ts, structures.ts, recipes.ts
+  store/      useWorld.ts, useView.ts, simWorker.ts
+  render/     Scene.tsx, BodyMesh.tsx, MinorBodies.tsx, OrbitLine.tsx, TrajectoryLine.tsx,
+              NodeGizmo.tsx, overlays/, camera/
+  ui/         layout/, panels/, fleet/, timeline/, planner/, economy/, construction/, designer/
 ```
 
-## Units, precision and scale
+**Worker split:** the layers from `sim/` up to `game/` run in a **Web Worker**. The main thread keeps a read-only mirror of the world, updated by diffs, and sends player actions to the worker as messages. The main thread evaluates positions needed every frame (bodies on rails, coasting conics) itself, from the mirrored elements.
 
-- **Internal units:** SI-derived, `km`, `s`, `kg`, `km/s`. Time is seconds from the scenario epoch, as a float64 `number`.
-- **Precision:** a solar system spans ~10¹⁰ km, but a docking approach is meters. Float64 on the CPU is enough (~15–16 significant digits). The GPU is float32, so:
-  - **Camera-relative rendering:** every frame, compute object positions minus the camera focus position in float64, *then* convert to float32 for Three.js. The focused object always sits near the render origin.
-  - Orbit/trajectory polylines are generated in the focus body's frame and re-based when focus changes.
-- **Display scale:** bodies are drawn at true size when close, with a minimum screen-space size (icons/markers) so they stay visible at system scale. Zoom is logarithmic.
+## Units, precision and rendering scale
 
-## Celestial bodies (on rails)
+- **Units:** `km`, `s`, `kg`, `km/s`, `kW`, `mSv`. Time is seconds from the scenario epoch, as a float64 `number`.
+- **Precision:** a solar system spans ~10¹⁰ km, but docking happens at a few hundred metres. Float64 is enough, as long as relative positions between ships are computed in a frame local to the pair and not from heliocentric positions.
+- **Camera-relative rendering:** the GPU is float32. So every frame, positions minus the camera focus position are computed in float64, *then* converted to float32. Orbit and trajectory polylines are generated in the focus body's frame and re-based when focus changes.
+- **Display scale:** bodies are drawn at true size when close, with a minimum screen-space size. Zoom is logarithmic. Minor bodies use instanced rendering, and their orbit lines are only drawn on demand.
 
-- A **body tree**: star → planets → moons (and asteroids/stations as leaves). Each non-root body has Keplerian elements relative to its parent, plus `mu` (GM), radius, and SOI radius (Laplace: `a·(m/M)^(2/5)`).
-- Position at time `t` is analytic: mean anomaly → solve Kepler's equation (Newton's method) → state vector in the parent frame. World position = sum up the tree.
-- No n-body perturbation. Orbits are fixed ellipses, which is cheap, exact and deterministic.
-- Real solar system: approximate elements from the JPL "Keplerian Elements for Approximate Positions of the Major Planets" table, with secular rates optionally ignored. Major moons from published mean elements.
+## Celestial bodies
 
-## Ships and trajectories (patched conics)
+- A **body tree**: star → planets → moons. Each non-root body has Keplerian elements relative to its parent, plus `mu`, radius, and SOI radius (Laplace: `a·(m/M)^(2/5)`).
+- **Major vs. minor:** a body below a mass threshold is **minor**. Minor bodies have no SOI, so patched-conic frame switches never involve them. They are treated as rendezvous targets, like ships. This keeps SOI checks cheap with hundreds of asteroids.
+- **Position at `t`:** mean anomaly → Kepler's equation (Newton's method) → state vector in the parent frame. World position = the sum up the tree. There is no n-body perturbation.
+- **Lagrange points** (`orbital/lagrange.ts`) are computed geometrically per star–planet and planet–moon pair. An object "at an L-point" is placed on rails at that position, with station-keeping assumed. Patched conics can't reproduce the dynamics of Lagrange points.
+- **Real-system data:** the JPL "Keplerian Elements for Approximate Positions of the Major Planets" table, published mean elements for major moons, and a sample of numbered asteroids.
 
-**Ship state:** at a reference time, `{ parentBodyId, r, v }` in the parent frame, plus mass, propellant, and engine parameters.
+## Ships, stations and stacks
 
-**Trajectory** = an ordered list of **conic segments**:
+- A ship or station is a set of **module instances** that reference `content/modules.ts`, plus stockpiles, crew and (for ships) a trajectory plan.
+- **Derived stats** are computed from the modules and the current stockpiles, and cached until either changes:
+  - mass, thrust and Isp per engine, Δv;
+  - power and heat balance;
+  - shielding factor.
+- **Stacks:** docked objects form a stack that propagates as one body with summed mass. Towing is just a stack flown by a tug's engines. Stations are stacks with no engines, held on rails.
+
+## Trajectories
+
+A trajectory is an ordered list of segments:
 
 ```ts
-interface ConicSegment {
+type Segment = ConicSegment | ThrustSegment;
+
+interface ConicSegment {           // coasting, analytic
+  kind: 'conic';
   parentId: BodyId;
-  elements: OrbitalElements;   // or epoch state vector, for hyperbolic/near-parabolic robustness
-  tStart: number;
-  tEnd: number;                // Infinity for a closed orbit with no further events
-  endEvent: 'soi-exit' | 'soi-enter' | 'maneuver' | 'impact' | 'horizon';
+  elements: OrbitalElements;       // or epoch state vector, for hyperbolic/near-parabolic robustness
+  tStart: number; tEnd: number;
+  endEvent: 'soi-exit' | 'soi-enter' | 'maneuver' | 'thrust-start' | 'impact' | 'horizon';
   endTargetId?: BodyId;
 }
-```
 
-**Propagation algorithm** (`sim/trajectory.ts`):
-1. Start from the ship state. Propagate analytically with universal-variable Kepler propagation, which handles elliptic, parabolic and hyperbolic orbits in one formulation.
-2. Find the earliest of these events within the planning horizon:
-   - the next maneuver node,
-   - SOI exit (`|r| > parent SOI`),
-   - SOI entry into a child body (closest approach to each child of the current parent; bracket and refine with root finding),
-   - impact (`|r| < parent radius`, or the atmosphere boundary).
-3. At the event, transform the state into the new frame (or apply the Δv), and start a new segment.
-4. Stop at a segment cap or at the time horizon (e.g. N orbits or T years).
-
-Trajectories are **computed lazily and cached**, keyed by (ship state, maneuver list). Editing a node invalidates that ship's trajectory from that node onward. If interactive node dragging becomes too slow, move propagation into a Web Worker. This is possible because `sim/` is pure.
-
-**Maneuver nodes:**
-
-```ts
-interface ManeuverNode {
-  id: NodeId;
-  shipId: ShipId;
-  t: number;                    // execution time
-  dv: { prograde: number; normal: number; radial: number }; // km/s, in the local orbital frame
+interface ThrustSegment {          // engine on, numerically integrated
+  kind: 'thrust';
+  parentId: BodyId;
+  samples: Float64Array;           // [t, x, y, z, vx, vy, vz, m] per integrator step
+  tStart: number; tEnd: number;
+  endEvent: 'thrust-end' | 'soi-exit' | 'soi-enter' | 'propellant-out' | 'impact';
 }
 ```
 
-- Start with **impulsive burns** (instantaneous Δv). Burn duration from the thrust and the rocket equation is computed and displayed, as a warning when long burns make the impulsive approximation inaccurate.
-- **[Open]** Finite or low-thrust burns (ion, fusion torch at plausible levels) can't be done with analytic conics. Options: (a) impulsive only; (b) numerically integrate during burns only (RK4/RK45 over the burn arc, then resume conics). Recommendation: (a) for v1, design the segment type so that (b) can add a `'burn'` segment later.
-- Propellant is spent with the Tsiolkovsky equation: `Δm = m·(1 − e^(−Δv / (Isp·g0)))`.
+Consumers switch on `kind`. The union exists from the first milestone, even before thrust segments are implemented.
 
-**Planning helpers** (`orbital/`):
-- **Lambert solver** (Izzo's algorithm) for transfer planning and porkchop plots.
-- Closest-approach and encounter detection between a ship trajectory and a target body or ship.
-- Hohmann transfer and phase-angle calculators, since those are the main transfers in this setting.
+**Coasting propagation:**
+1. Universal-variable Kepler propagation, which handles elliptic, parabolic and hyperbolic orbits in one formulation.
+2. Find the earliest of these events: the next node or arc, SOI exit, SOI entry into a major child body (bracket and refine with root finding), or impact (`|r| < radius + atmosphere height`).
+3. At the event: transform the state to the new frame, apply the Δv, or start a thrust segment.
+4. Stop at a segment cap or at the time horizon.
 
-## Simulation clock and game loop
+**Thrusting propagation** (`orbital/integrate.ts`):
+- Two-body gravity, plus thrust, plus the change in mass. Integrated with Dormand–Prince RK45 with **deterministic step control**.
+- The SOI radius is checked at every step, and the crossing is refined with root finding.
+- `F = throttle × F_max(power available)`. Solar-electric `F_max` scales with the solar flux, ∝ 1/r². `mdot = F / (Isp·g0)`.
 
-- **Sim time** is separate from wall time. `clock` holds `t`, `warpRate`, and `paused`.
-- Each frame: `t += dt_wall × warpRate`, clamped so that it never passes the next **scheduled event** (maneuver execution, SOI change, arrival, game event). At an event the clock stops, or drops to a safe warp, and the event is resolved.
-- Executing a maneuver node replaces the ship's reference state with the post-burn state and removes the node. This is the only point where ship state actually changes, so the committed history is a simple list of executed nodes.
-- **Preview time** (UI only): the player can scrub a timeline to view the system at a future time without advancing sim time. Rendering reads `viewTime` (preview, or else sim time); the game only advances on sim time.
+**Plan representations:**
 
-## Game layer (roguelike)
+```ts
+interface ManeuverNode {           // impulsive (planning abstraction)
+  id: NodeId; shipId: ShipId; t: number; enabled: boolean;
+  dv: { prograde: number; normal: number; radial: number };   // km/s, local orbital frame
+  execution: 'impulsive' | 'finite';                         // 'finite' = burn centred on t
+}
 
-The mechanics are still to be designed. The architecture needs these hooks:
-- **World state:** bodies (with a "surveyed" or knowledge level), ships, resources, missions, and the event log.
-- **Resources:** propellant and Δv budget per ship, consumables or crew time, mission time.
-- **Fog of war / survey [proposal]:** unsurveyed bodies have uncertain orbits, drawn as fuzzy bands. Survey probes refine the elements and reveal composition and resources. This fits the generation-ship scenario in [scenarios.md](scenarios.md) and makes exploration part of the mechanics, not just the theme.
-- **Events** are generated by the seeded RNG at deterministic sim times, or triggered by state (arrival at a body).
-- Turn structure: real-time with pause and warp, interrupted at events, like a "plan, then commit time" loop. **[Decision]**
+interface ThrustArc {              // explicit low-thrust burn
+  id: ArcId; shipId: ShipId; enabled: boolean;
+  tStart: number; duration: number;
+  steering: SteeringMode; throttle: number;                   // 0–1
+  engineId: ModuleId;
+}
+```
 
-## Generation (`gen/`)
+A node with `execution: 'finite'` is converted to a thrust segment of the same Δv when the trajectory is computed.
 
-- Seeded PRNG (e.g. `sfc32` or `mulberry32`) with **one sub-stream per subsystem** (`rng.fork('planets')`), so that adding a feature doesn't reshuffle every existing seed.
-- **Real system:** a fixed body catalog. Randomness applies only to start epoch, scenario, and ship placement.
-- **Fictional system:** star mass and luminosity → frost line → planet count and spacing (loose Titius–Bode-like spacing, with a stability check of ≥ ~10 mutual Hill radii between neighbors) → mass and type by distance → moons inside the Hill sphere → asteroid belts. All of it is parameterised so that difficulty can tune it.
+**Caching:** trajectories are computed lazily in the worker, and cached by ship state plus plan. Only the active ship's plan can be edited, so interactive recomputation only ever affects one ship. While a handle is being dragged, thrust arcs are integrated with a coarser tolerance; the full-accuracy result replaces it when the drag ends.
+
+## Closest approach and docking detection
+
+- **Closest approach** (`orbital/approach.ts`): for each overlapping time window, express both states in the parent frame of one of the two objects. Bracket on the sign change of `r_rel · v_rel`, and refine with Brent's method. Relative state is computed in that local frame.
+- **Scheduled docking:** every predicted approach that meets the docking criteria is put on the event queue ahead of time. Docking is then resolved exactly at that time, even at high warp, and never by checking each frame.
+- **Pair pruning:** only pairs in the same SOI, with overlapping time windows, where at least one object has a plan or a target, are tested. This avoids testing every pair, which is O(n²).
+
+## Planning tools
+
+Each tool in `planning/` is a pure function `(world, shipId, params) → (ManeuverNode | ThrustArc)[]`. The outputs are ordinary plan items. `planning/program.ts` runs a **sequence of tool steps** (the representation of a logistics route) by evaluating each step against the predicted state at the end of the step before it. Supporting math lives in `orbital/`: a Lambert solver (Izzo's algorithm), Hohmann and phase-angle calculations, and Edelbaum estimates.
+
+## Environment
+
+- Every model is analytic in position and time, so it can be evaluated cheaply at any warp:
+  - background radiation is a function of distance from the star;
+  - radiation belts are tori per body;
+  - solar storms are expanding shells, with seeded onset times;
+  - solar flux ∝ 1/r².
+- **Dose** = ∫ (rate × shielding factor) dt along a trajectory. It is computed by quadrature per segment and cached with the trajectory.
+- **Power and heat** are a static balance per stack, re-solved at events. Shortfalls throttle consumers in a fixed priority order.
+
+## Knowledge (true vs. known world)
+
+The worker holds the **true** world. Each body also has a knowledge record, and only the **known** world is sent to the main thread.
+
+```ts
+interface BodyKnowledge {
+  detected: boolean;
+  orbitSigma: number;              // position uncertainty, km; ∞ until detected
+  estimatedElements?: OrbitalElements;
+  composition: 'unknown' | 'spectral-estimate' | 'assayed';
+  compositionEstimate?: Record<ResourceId, [low: number, high: number]>;
+  radiationBeltsMapped: boolean;
+}
+```
+
+- Survey campaigns produce observations at deterministic times, as events. Each observation updates the knowledge record.
+- The transfer planner refuses targets whose `orbitSigma` is above a threshold. So all planning uses true elements, and predicted encounters never drift as estimates improve.
+
+## Economy solver
+
+The economy is **event-driven**, with no per-tick stepping. Between events, all rates are constant, so every stockpile changes linearly with time. At each event, the solver:
+1. resolves the rates at each location, limited by inputs, power, crew and storage, with facilities served in priority order;
+2. computes analytically the next time any stockpile reaches zero or its capacity;
+3. schedules that time as an event.
+
+Stockpile values between events are interpolated. Construction, population growth and docked transfers are modelled as rates with completion events.
+
+## Clock and event queue
+
+- `clock` holds `t`, `warpRate` and `paused`. Each frame: `t += dt_wall × warpRate`, clamped so that it never passes the next event in the **priority queue**.
+- Event sources:
+  - plans: nodes, the start and end of arcs;
+  - trajectories: SOI changes, closest approaches, docking, impact;
+  - the economy: stockpile limits, construction completion, population changes;
+  - knowledge: survey results;
+  - the environment: storm warning and onset;
+  - alarms, and scenario events.
+- At each event, the handler decides whether to pause, drop warp, or continue.
+- Physical state changes only at events: plan execution, docking, undocking, construction completion. **Preview time** is view state only. Rendering reads `viewTime`; the sim only advances `t`.
+
+## Alarms
+
+```ts
+interface Alarm {
+  id: AlarmId;
+  scope: { kind: 'ship'; shipId: ShipId } | { kind: 'fleet'; fleetId: FleetId }
+       | { kind: 'station'; stationId: StationId } | { kind: 'global' };
+  trigger:
+    | { kind: 'event'; eventKey: EventKey }               // one specific predicted event
+    | { kind: 'event-type'; type: SimEventType }          // e.g. every SOI change for the scope
+    | { kind: 'time'; t: number };
+  leadTime: number;                                       // seconds before the event
+  action: 'pause' | 'drop-warp';
+}
+```
+
+- Fleet scope is resolved when the alarm is evaluated, so it covers ships added to the fleet later.
+- `EventKey` = object + event type + target + sequence number. It is stable across replanning. When its event disappears, the alarm is dropped and the player is notified.
+
+## Generation pipeline
+
+- A seeded PRNG (e.g. `sfc32`) with **one sub-stream per subsystem** (`rng.fork('planets')`), so that adding a feature doesn't reshuffle existing seeds.
+- **Fictional system:**
+  1. Star → frost line.
+  2. Planets: count and spacing (stability check of ≥ ~10 mutual Hill radii), then mass and type by distance.
+  3. Moons inside each planet's Hill sphere.
+  4. Minor bodies (belts, comets).
+  5. Radiation belts.
+  6. Composition (`gen/composition.ts`).
+  7. A reachability check that guarantees a minimum reachable amount of each resource.
+- **Real system:** a fixed catalog. The seed varies the epoch, the scenario, resource details and storm timing.
 
 ## State management and persistence
 
-- **zustand** stores. Two kinds:
-  - `world`: simulation and game state. It is serializable, with no Three.js objects, and changes only through explicit actions (`addNode`, `editNode`, `commitTime`, …).
-  - `view`: selection, camera focus, filters, preview time, and panel state. It is not saved with the game, or is saved separately.
-- Render components read positions every frame from the sim (via `useFrame`), not through React state. This avoids re-rendering React at 60 Hz.
-- **Saves:** `{ version, seed, scenarioParams, worldSnapshot }` in IndexedDB. Snapshots are small because bodies are regenerated from the seed.
+- **zustand**, on the main thread:
+  - `world`: a read-only mirror of the known world. Player actions (`addNode`, `editArc`, `setAlarm`, `assignRoute`, `queueConstruction`, …) are sent to the worker as messages.
+  - `view`: active ship, selection, target, camera, filters, preview time, and the open screens. It is not saved.
+- Render components read positions every frame via `useFrame`, not through React state.
+- **Saves:** `{ version, seed, scenarioParams, worldSnapshot }` in IndexedDB. The snapshot holds the full true world. Body orbits are regenerated from the seed.
 
-## Tooling
+## Tooling and testing
 
-- **Vite** for dev and build, **Vitest** for unit tests.
-- The physics core is tested against known values: textbook Kepler problems, Hohmann Δv for Earth→Mars, Lambert test cases, and known planet positions at a reference epoch.
-- ESLint import rules enforce the layer dependency rule.
+- **Vite** (with worker bundling), **Vitest**, ESLint import rules.
+- **Physics tests:**
+  - Kepler textbook cases, Earth→Mars Hohmann Δv, Lambert test cases;
+  - planet positions at a reference epoch;
+  - closest-approach accuracy at docking scale;
+  - integrator energy drift, and low-thrust spirals against Edelbaum estimates.
+- **Economy tests:** conservation of mass, and stockpile-limit timing checked against brute-force stepping.
 
-## Open questions
+## Extension points
 
-1. Are finite or low-thrust burns needed in v1, or are impulsive burns enough? 
- > Impulsive burns are good for v1, later versions will add more realistic finite-thrust burns.
-
-2. Real-time with pause, or discrete turns?
- > Real-time with pause. 
-
-3. Does the player control many ships at once (fleet), or mainly one ship at a time? This affects UI density and how many trajectories need to be recomputed.
- > Control (eg. maneuver nodes) is per-ship. The player will manage and control a fleet of ships, but only a single ship at a time.
-
-4. Are there ship-to-ship interactions, such as rendezvous, docking, and refuelling? Rendezvous needs relative-motion tools and finer precision. 
- > Rendevous is accomplished from the map screen. Maneuver planning tools assist with rendevous (ie. match target velocity). Docking is automatic when ships are in proximity (eg. < 500 m separation, < 2 m/s relative velocity).
-
-5. Are surface landings or atmospheres modeled, or is everything orbital?
- > Surface landings and atmospheric flight are not modeled in v1. Later iterations may include surface landing and atmospheric flight, but these will be highly simplified.
-
-6. Is mobile or touch support a goal?
- > Mobile support is not a goal. VR support is a possible future goal.
+- **VR:** R3F supports WebXR via `@react-three/xr`. Scene and camera logic must not depend on DOM overlays, and map interactions go through an input abstraction that a controller ray could also drive.
+- **Ship 3D models:** the module list is the full ship definition, so visual models can be added later without changing the sim.

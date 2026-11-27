@@ -12,7 +12,14 @@ The principle view of the game is a map of a solar system, with the position, tr
 
 # Project Structure
 
-The concept and architecture of the game are documented in the `docs` folder.
+The concept and architecture of the game are documented in the `docs` folder:
+
+- `gameplay-outline.md`, `scenarios.md`, `worldbuilding.md` — vision and setting
+- `features.md` — game systems and rules (what the game does)
+- `architecture.md` — technical design (how it is built)
+- `interface.md` — UI design
+- `milestones.md` — build order
+- `decisions.md` — open questions and the decision log for all docs
 
 # Tech Stack
 
