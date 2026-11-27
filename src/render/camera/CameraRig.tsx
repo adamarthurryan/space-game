@@ -1,12 +1,13 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useState } from 'react';
-import { Matrix4, Vector3 } from 'three';
+import { Matrix4, Vector3, type PerspectiveCamera } from 'three';
 import { vec3, type Vec3 } from '../../math/vec3';
 import { meanOrbitNormal } from '../../orbital/propagate';
 import { getBody } from '../../sim/body';
 import { useView } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { STAGE, frameWorldInto, useMapFrame, type MapFrame } from '../mapFrame';
+import { setFrameCamera } from '../projection';
 import {
   beginRefocus,
   beginSnap,
@@ -18,7 +19,6 @@ import {
   stepController,
   wheelNotches,
   zoomBy,
-  type CameraController,
 } from './controller';
 import { framingDistance, minDistance } from './framing';
 
@@ -43,7 +43,7 @@ const back = new Vector3();
 
 /** Applies the controller's pose to a three.js camera, through a basis (no lookAt). */
 function applyPose(
-  c: CameraController,
+  pose: ReturnType<typeof controllerPose>,
   camera: {
     position: Vector3;
     up: Vector3;
@@ -51,7 +51,7 @@ function applyPose(
   },
   m: Matrix4,
 ): void {
-  const { offset, forward: f, up: u } = controllerPose(c);
+  const { offset, forward: f, up: u } = pose;
   // Right = forward × up. three's camera looks down its −z, with +y up and +x right.
   right.set(f.y * u.z - f.z * u.y, f.z * u.x - f.x * u.z, f.x * u.y - f.y * u.x);
   up.set(u.x, u.y, u.z);
@@ -63,7 +63,7 @@ function applyPose(
 }
 
 /**
- * The camera stage (−2). Owns the controller, feeds it wheel and drag input from the canvas,
+ * The camera stage. Owns the controller, feeds it wheel and drag input from the canvas,
  * reacts to focus and snap requests from the view store, and each frame steps it, writes the
  * scene origin into the MapFrame and sets the three.js camera from its pose.
  */
@@ -140,10 +140,13 @@ export function CameraRig() {
     [controller],
   );
 
-  useFrame(({ camera }, delta) => {
+  useFrame(({ camera, size }, delta) => {
     stepController(controller, delta);
     controllerOriginInto(controller, focusWorldOf(frame), frame.origin);
-    applyPose(controller, camera, matrix);
+    const pose = controllerPose(controller);
+    applyPose(pose, camera, matrix);
+    const fov = ((camera as PerspectiveCamera).fov * Math.PI) / 180;
+    setFrameCamera(frame, pose, fov, size.width, size.height);
   }, STAGE.camera);
 
   return null;

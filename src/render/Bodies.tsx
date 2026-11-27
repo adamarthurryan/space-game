@@ -14,7 +14,7 @@ const AMBIENT_INTENSITY = 0.12;
 
 /**
  * The body layer: one sphere per body and the Sun's light, positioned relative to the scene
- * origin in one `useFrame` (stage −1).
+ * origin in one `useFrame` (layers stage). A sphere under 0.5 px is hidden (S2-7).
  */
 export function Bodies() {
   const frame = useMapFrame();
@@ -28,7 +28,9 @@ export function Bodies() {
     const { world, origin, order } = frame;
     for (let i = 0; i < order.length; i++) {
       const mesh = meshes.current[i];
-      if (mesh) setObjectPositionAt(mesh, world, i, origin);
+      if (!mesh) continue;
+      mesh.visible = frame.sphereShown[i] === 1;
+      if (mesh.visible) setObjectPositionAt(mesh, world, i, origin);
     }
     if (light.current) setObjectPositionAt(light.current, world, sunIndex, origin);
   }, STAGE.layers);

@@ -1,0 +1,19 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+  visibility: hidden;
+  will-change: transform;
+}
