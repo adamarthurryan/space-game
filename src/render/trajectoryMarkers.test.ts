@@ -17,6 +17,7 @@ const vp = Math.sqrt(MU_PLANET * (2 / rp - 1 / a));
 function traj(revs: number, end: Segment['endEvent']): Trajectory {
   return {
     version: 1,
+    key: '',
     segments: [
       {
         kind: 'conic',
@@ -88,7 +89,7 @@ describe('trajectoryMarkers', () => {
     const m = trajectoryMarkers(
       sys,
       'ship-1',
-      { version: 1, segments: [before] },
+      { version: 1, key: '', segments: [before] },
       -3600,
       'planet',
       true,

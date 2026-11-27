@@ -148,7 +148,7 @@ describe('planBudget', () => {
     const dv = stats.dv;
     ship.plan = [node('a', 600, 0.4 * dv), node('b', 3000, 0, 0.8 * dv)];
     const segments = computeTrajectory(sys, orbit, { plan: ship.plan, dvAvailable: dv });
-    const b = planBudget(ship, { segments, version: 1 }, reg);
+    const b = planBudget(ship, { segments, version: 1, key: '' }, reg);
     const [na, nb] = b.nodes;
     expect(na!.dvApplied).toBe(0.4 * dv);
     expect(na!.overBudget).toBe(false);
@@ -169,7 +169,7 @@ describe('planBudget', () => {
     const off = { ...node('a', 600, 0.1), enabled: false };
     ship.plan = [off, node('b', 1e12, 0.1)];
     const segments = computeTrajectory(sys, orbit, { plan: ship.plan });
-    const b = planBudget(ship, { segments, version: 1 }, reg);
+    const b = planBudget(ship, { segments, version: 1, key: '' }, reg);
     expect(b.nodes.map((n) => [n.reached, n.dvApplied])).toEqual([
       [true, 0],
       [false, 0],

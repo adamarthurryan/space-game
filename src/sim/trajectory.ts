@@ -45,8 +45,10 @@ export type Segment = ConicSegment;
 
 export interface Trajectory {
   segments: Segment[];
-  /** Bumped on every recompute. */
+  /** Bumped whenever the segments change. */
   version: number;
+  /** The inputs the segments were computed from (S4-8): `trajectoryKey`. */
+  key: string;
 }
 
 export interface TrajectoryOptions {
@@ -261,4 +263,21 @@ export function computeTrajectory(
     state = transitionState(sys, seg);
   }
   return segments;
+}
+
+/**
+ * The cache key of a ship's trajectory inputs (S4-8): its status, orbit, enabled nodes and the
+ * Δv available. Numbers are written exactly (`String` of a float64 round-trips).
+ */
+export function trajectoryKey(
+  ship: { status: string; orbit: OrbitState; plan: readonly ManeuverNode[] },
+  dvAvailable: number,
+): string {
+  if (ship.status !== 'coasting') return ship.status;
+  const { parentId, t, r, v } = ship.orbit;
+  let key = `${parentId}|${t}|${r.x},${r.y},${r.z}|${v.x},${v.y},${v.z}|${dvAvailable}`;
+  for (const n of ship.plan) {
+    if (n.enabled) key += `|${n.id}@${n.t}:${n.dv.prograde},${n.dv.normal},${n.dv.radial}`;
+  }
+  return key;
 }

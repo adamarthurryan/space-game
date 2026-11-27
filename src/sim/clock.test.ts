@@ -3,6 +3,7 @@ import { SECONDS_PER_DAY } from '../math/units';
 import {
   advanceClock,
   createClock,
+  DEFAULT_PAUSE_ON,
   MAX_FRAME_DT,
   setPaused,
   setWarpIndex,
@@ -15,7 +16,7 @@ import {
 describe('clock', () => {
   it('starts running at ×1', () => {
     const c = createClock();
-    expect(c).toEqual({ t: 0, warpIndex: 0, paused: false });
+    expect(c).toEqual({ t: 0, warpIndex: 0, paused: false, pauseOn: DEFAULT_PAUSE_ON });
     expect(warpRate(c)).toBe(1);
     expect(createClock(42).t).toBe(42);
   });

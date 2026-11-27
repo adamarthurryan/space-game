@@ -8,16 +8,19 @@
  */
 
 import { createPQueue, push, removeWhere } from '../math/pqueue';
-import type { NodeId } from './maneuver';
+import type { PausableEvent } from './clock';
+import { burnPropellant, type NodeId } from './maneuver';
 import { shipStats, type ShipId } from './ship';
 import {
   assertNever,
   computeTrajectory,
   segmentStateAt,
+  trajectoryKey,
   transitionState,
+  type Segment,
   type SegmentEnd,
 } from './trajectory';
-import type { World } from './world';
+import type { Derived, World } from './world';
 
 export type SimEvent =
   | { type: 'soi-change'; shipId: ShipId; trajectoryVersion: number }
@@ -81,9 +84,17 @@ function eventTypeFor(end: SegmentEnd): SimEventType {
 }
 
 /** An empty set of derived data. */
-export function emptyDerived(): World['derived'] {
-  return { trajectories: {}, events: createPQueue() };
+export function emptyDerived(): Derived {
+  return {
+    trajectories: {},
+    events: createPQueue(),
+    trajectoryCache: {},
+    cacheStats: { hits: 0, misses: 0 },
+  };
 }
+
+/** Trajectories kept per ship in the cache (S4-8). */
+export const TRAJECTORY_CACHE_SIZE = 4;
 
 /** Replaces the ship's pending event with the end of its current segment (none if destroyed). */
 export function queueShipEvent(world: World, shipId: ShipId): void {
@@ -104,23 +115,42 @@ export function queueShipEvent(world: World, shipId: ShipId): void {
   );
 }
 
-/** Recomputes one ship's trajectory from its orbit, bumps its version, and re-queues its event. */
+/**
+ * Brings one ship's trajectory up to date with its orbit, plan and Δv (S4-8): nothing changes if
+ * the key is the same; otherwise the segments come from the ship's cache or are computed, the
+ * version is bumped, and the ship's event is re-queued.
+ */
 export function refreshShipDerived(world: World, shipId: ShipId): void {
   const ship = world.ships[shipId];
   if (!ship) throw new Error(`Unknown ship: ${shipId}`);
-  const old = world.derived.trajectories[shipId];
-  world.derived.trajectories[shipId] = {
-    segments:
-      ship.status === 'coasting'
-        ? computeTrajectory(world.system, ship.orbit, {
-            plan: ship.plan,
-            dvAvailable: shipStats(ship).dv,
-          })
-        : [],
-    version: (old?.version ?? 0) + 1,
-  };
+  const d = world.derived;
+  const old = d.trajectories[shipId];
+  const coasting = ship.status === 'coasting';
+  const dv = coasting ? shipStats(ship).dv : 0;
+  const key = trajectoryKey(ship, dv);
+  if (old && old.key === key) return;
+  const cache = (d.trajectoryCache[shipId] ??= []);
+  const i = cache.findIndex((c) => c.key === key);
+  let segments: Segment[];
+  if (i >= 0) {
+    segments = cache[i]!.segments;
+    cache.splice(i, 1);
+    d.cacheStats.hits++;
+  } else {
+    segments = coasting
+      ? computeTrajectory(world.system, ship.orbit, { plan: ship.plan, dvAvailable: dv })
+      : [];
+    d.cacheStats.misses++;
+  }
+  cache.push({ key, segments });
+  if (cache.length > TRAJECTORY_CACHE_SIZE) cache.shift();
+  d.trajectories[shipId] = { segments, version: (old?.version ?? 0) + 1, key };
   queueShipEvent(world, shipId);
 }
+
+/** Whether a handled event of this type pauses the clock (S4-7). */
+const pauseFor = (world: World, type: PausableEvent): EventOutcome =>
+  world.clock.pauseOn[type] ? { pause: true } : {};
 
 /** The ship's trajectory if the event is current for it, else null (a stale event). */
 function current(world: World, e: SimEvent) {
@@ -142,13 +172,28 @@ export function registerShipHandlers(reg: EventRegistry): void {
     if (!next) return;
     c.ship.orbit = next;
     refreshShipDerived(world, e.shipId);
+    return pauseFor(world, 'soi-change');
   });
   on(reg, 'impact', (world, e) => {
     const c = current(world, e);
     if (!c) return;
     c.ship.status = 'destroyed';
     c.ship.destroyedAt = { t: c.seg.tEnd, bodyId: c.seg.endTargetId ?? c.seg.parentId };
+    c.ship.plan = [];
     refreshShipDerived(world, e.shipId);
+    return pauseFor(world, 'impact');
+  });
+  // Node execution (S4-5): the burn the prediction made, from the same numbers.
+  on(reg, 'node', (world, e) => {
+    const c = current(world, e);
+    if (!c || c.seg.endEvent !== 'maneuver' || c.seg.endNodeId !== e.nodeId) return;
+    const next = transitionState(world.system, c.seg);
+    if (!next) return;
+    burnPropellant(c.ship, c.seg.dvApplied ?? 0);
+    c.ship.plan = c.ship.plan.filter((n) => n.id !== e.nodeId);
+    c.ship.orbit = next;
+    refreshShipDerived(world, e.shipId);
+    return pauseFor(world, 'node');
   });
   on(reg, 'trajectory-horizon', (world, e) => {
     const c = current(world, e);
