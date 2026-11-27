@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 
+import type { BodyId } from '../sim/body';
+
+/** Something on the map that can be selected, hovered or focused. Sprint 3 adds ships. */
+export type MapObjectRef = { kind: 'body'; id: BodyId };
+
 /** Tabs of the left sidebar. */
 export type LeftTab = 'system' | 'fleets' | 'stations' | 'routes';
 
