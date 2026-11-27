@@ -4,7 +4,7 @@ This document covers how the game is built. What the game does is in [features.m
 
 ## Technical constraints
 
-- Purely client-side, browser-based. TypeScript, plain three.js for the map, React for the UI panels. Desktop browsers, with mouse and keyboard. React Three Fiber (R3F) hosted the map up to milestone 1 sprint 2 and is replaced with plain three.js at the start of sprint 3 (decision 90).
+- Purely client-side, browser-based. TypeScript, plain three.js for the map, React for the UI panels. Desktop browsers, with mouse and keyboard. React Three Fiber (R3F) hosted the map up to milestone 1 sprint 2 and was replaced with plain three.js at the start of sprint 3 (decision 90).
 - **The simulation is independent of rendering.** Everything below `store/` is plain TypeScript with no React or Three.js, and can be unit-tested headlessly.
 - **World state is plain data:** objects, arrays and typed arrays keyed by ID, with no class instances and no functions. Sim code is functions over that data. This makes saves a straight serialisation, and keeps the option of moving the sim into a Web Worker later (see [Threads](#threads)).
 - **Reproducibility:** generation is seeded, so the same seed and generator version give the same system. Sim code uses no `Math.random` and no wall-clock time, so a world loaded from a save recomputes the same trajectories and event times on the same browser engine. Input replay is not a goal: saves store full world snapshots.
@@ -56,12 +56,14 @@ src/
   economy/    stockpile.ts, facility.ts, rates.ts, construction.ts, crew.ts, routes.ts
   game/       actions.ts, progression.ts, scenario.ts, rules.ts
   gen/        realSystem.ts, fictionalSystem.ts, composition.ts, scenario.ts
-  content/    types.ts, registry.ts, resources.ts, recipes.ts, structures.ts,
+  content/    types.ts, registry.ts, resources.ts, designs.ts, recipes.ts, structures.ts,
               modules/ (one file per module type)
   store/      useWorld.ts, useView.ts, jobs.ts, jobWorker.ts
-  render/     Scene.tsx (React host), MapRenderer.ts, mapFrame.ts, projection.ts, precision.ts,
-              picking.ts, NodeGizmo.ts, layers/ (bodies, orbits, markers, minor bodies,
-              trajectories), overlays/ (labels, declutter), camera/ (controller, framing)
+  render/     Scene.tsx (React host), MapRenderer.ts, stages.ts, mapFrame.ts, projection.ts,
+              precision.ts, picking.ts, trajectoryGeometry.ts, trajectoryMarkers.ts, NodeGizmo.ts,
+              layers/ (bodies, orbits, trajectories, markers, minor bodies), input/ (camera,
+              pointer), overlays/ (labels, declutter, trajectory markers), camera/ (controller,
+              framing, camera stage)
   ui/         layout/, panels/, fleet/, timeline/, planner/, economy/, construction/, designer/
 ```
 
@@ -104,6 +106,8 @@ src/content/
 
 - Resource IDs are the keys of the `resources` object, so a misspelt resource in a recipe, propellant or material list is a type error.
 - Every module type extends a **shared base type**, and adds only the fields its kind needs. Fields are added when the system that reads them is built (for example, landing capability flags arrive with landing).
+- A module's family is its **`category`** discriminant (`'backbone' | 'engine' | 'tank'` so far), so `Engine.kind` stays the engine type. Units inside `content/` are fixed by convention: mass in kg, volume in m³, thrust in N, Isp in s; `sim/` converts where needed (decision 93).
+- **Preset designs** (`content/designs.ts`) name a backbone, modules with counts, and an inert payload mass. A ship copies them when it is created, so changing a design never changes existing ships (decision 94).
 
 ```ts
 // resources.ts
@@ -128,10 +132,11 @@ interface ModuleBase {
 }
 
 interface Engine extends ModuleBase {
-  kind: 'chemical' | 'ntr-solid' | 'ntr-gas' | 'electric';
+  category: 'engine';
+  kind: 'chemical' | 'ntr-solid' | 'ntr-gas' | 'electric'; // 'chemical' only so far
   thrust: number; // N
   isp: number; // s
-  propellant: Partial<Record<ResourceId, number>>; // mass ratio of each propellant consumed
+  propellant: Partial<Record<ResourceId, number>>; // mass fraction of each propellant, summing to 1
 }
 ```
 
@@ -144,6 +149,7 @@ export const engines = [
   {
     id: 'ntr-solid-small',
     name: 'Solid-core NTR (25 kN)',
+    category: 'engine',
     kind: 'ntr-solid',
     mass: 2300,
     volume: 9,
@@ -174,19 +180,18 @@ export const engines = [
 - **Precision:** a solar system spans ~10¹⁰ km, but docking happens at a few hundred metres. Float64 is enough, as long as relative positions between ships are computed in a frame local to the pair and not from heliocentric positions.
 - **Camera-relative rendering:** the GPU is float32. The scene's axes are the world axes in km, and its **origin is the camera focus point**: every frame, positions minus the origin are computed in float64, _then_ converted to float32 (`render/precision.ts`), so nothing on the GPU holds a world position. During a refocus the origin moves between the two bodies, both evaluated at the current `t` (decision 77).
 - **Depth:** a logarithmic depth buffer with fixed near (1e-3 km) and far (1e12 km) planes; every custom shader includes three's `logdepthbuf` chunks (decision 78).
-- **Orbit lines:** a body's orbit is drawn around its parent, resampled from its mean elements at `t` every frame in float64 and starting at the body, so the body always sits on its line (decision 80). Ship trajectory polylines (sprint 3) are generated in the focus body's frame and re-based when focus changes.
+- **Orbit lines:** a body's orbit is drawn around its parent, resampled from its mean elements at `t` every frame in float64 and starting at the body, so the body always sits on its line (decision 80). Ship trajectories are drawn relative to the focus body (or a focused ship's parent), each point expressed in that frame at its own time, and written through the same float64 → float32 path (decisions 106, 107).
 - **Display scale:** bodies are drawn at true size when close, with a minimum screen-space size. Zoom is logarithmic. Minor bodies use instanced rendering, and their orbit lines are only drawn on demand.
 
 **Rendering conventions** (plain three.js; decision 90):
 
-- **One renderer, one loop.** `render/MapRenderer.ts` owns the `WebGLRenderer`, the scene, the camera, a `ResizeObserver` and the `requestAnimationFrame` loop. `render/Scene.tsx` is the only React component: it creates the renderer in an effect, disposes it on unmount, and renders the DOM label overlay.
-- **Frame stages** run in a fixed order and share a per-scene `MapFrame` of plain arrays (`render/mapFrame.ts`), allocated once: the clock, body world positions, the camera (which sets the origin), the projection of every body to the screen, the scene layers, then the labels (decision 84). The sim clock ticks in the first stage, before all render updates.
-- **Layers** are classes (`render/layers/`) with `constructor(scene, frame, system)`, `update(frame, view)` and `dispose()`. One layer per kind of object (all bodies, all orbits, all trajectories), iterating the world, rather than one object per entity. A layer rebuilds its three.js objects only when the set of entities changes, never per frame.
+- **One renderer, one loop.** `render/MapRenderer.ts` owns the `WebGLRenderer`, the scene, the camera, a `ResizeObserver`, the map input listeners (`render/input/`) and the `requestAnimationFrame` loop; it is the only place in `render/` that reads the wall clock. `render/Scene.tsx` is the only React component apart from the DOM overlays: it creates the renderer in an effect, disposes it on unmount, and renders the label and trajectory-marker overlays (decision 91).
+- **Frame stages** run in the order of `STAGES` (`render/stages.ts`) and share a per-scene `MapFrame` of plain arrays (`render/mapFrame.ts`), allocated once per body system: the clock, body world positions, ship world positions, the camera (which sets the origin, and may follow a ship), the projection of every body and ship to the screen, the scene layers, then the labels and trajectory markers (decisions 84, 92). The clock stage runs `advanceWorld`, which handles sim events, before all render updates. The ship arrays are reallocated only when the set of drawn ships changes.
+- **Layers** are classes (`render/layers/`: bodies, orbits, trajectories, markers, drawn in that order) with `update(frame, view)`, an optional `sync(world)` called when the store version changes, and `dispose()`. One layer per kind of object (all bodies, all orbits, all trajectories), iterating the world, rather than one object per entity. A layer rebuilds its three.js objects only when the set of entities changes, never per frame.
 - **Logic stays out of three.js:** projection, picking, decluttering, fades, framing and the camera controller are pure TypeScript modules, tested headlessly; the layers and the renderer only apply their results to three.js objects.
-- **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest disc under the cursor, then a label, then the nearest marker within a pixel radius (decision 82). Map input uses DOM listeners on the canvas. Real meshes that need exact hits, such as the node gizmo's handles (sprint 4), use a `Raycaster` from the same listeners.
-- **Bodies on screen:** true-size spheres, a fixed-size marker below 3 px of disc radius, and a body within 6 px of its parent's centre merges into it (decision 79).
-- **Labels are a custom DOM overlay** with priority decluttering, positioned every frame by the labels stage (decision 83).
-- **Until sprint 3** the same stages and layers run as R3F `useFrame` callbacks and components; the switch keeps the stage order, the `MapFrame` and the pure modules.
+- **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest ship marker within reach that isn't behind a nearer disc, then the nearest disc under the cursor, then a label, then the nearest body marker within a pixel radius (decisions 82, 110). Map input uses DOM listeners on the canvas. Real meshes that need exact hits, such as the node gizmo's handles (sprint 4), use a `Raycaster` from the same listeners.
+- **Bodies on screen:** true-size spheres, a fixed-size marker below 3 px of disc radius, and a body within 6 px of its parent's centre merges into it (decision 79). **Ships** are 7 px triangles in their palette colour; a ship near its parent's centre merges the same way unless it is focused or selected (decision 110).
+- **Labels are a custom DOM overlay** with priority decluttering, positioned every frame by the labels stage (decision 83). Ship labels rank below dwarf planets and above moons. Trajectory marker texts are placed after the labels and give way to them (decision 109).
 
 ## Celestial bodies
 
@@ -226,19 +231,21 @@ interface ConicSegment {
   v0: Vec3; // state at tStart, in the parent frame
   tStart: number;
   tEnd: number;
-  endEvent: 'soi-exit' | 'soi-enter' | 'maneuver' | 'impact' | 'horizon';
-  endTargetId?: BodyId;
+  endEvent: 'soi-exit' | 'soi-enter' | 'impact' | 'horizon'; // sprint 4 adds 'maneuver'
+  endTargetId?: BodyId; // the body entered, exited to, or impacted
 }
 ```
 
 A conic segment stores its starting state vector, because universal-variable propagation works from it directly and stays robust for hyperbolic and near-parabolic orbits. Orbital elements (Pe, Ap, inclination, …) are derived from it for display.
 
-**Coasting propagation:**
+**Coasting propagation** (`sim/trajectory.ts`, decisions 97, 98):
 
 1. Universal-variable Kepler propagation, which handles elliptic, parabolic and hyperbolic orbits in one formulation.
-2. Find the earliest of these events: the next node or arc, SOI exit, SOI entry into a major child body (bracket and refine with root finding), or impact (`|r| < radius + atmosphere height`).
+2. Find the earliest of these events: the next node or arc (sprint 4), impact (`|r| = radius + atmosphere height`, inbound) and SOI exit (`|r| = soiRadius`, outbound), both solved in closed form from the conic (`orbital/soi.ts`, `timeToRadius`), and SOI entry into a major child body whose radial band overlaps the ship's. Entry is found by **conservative advancement** on `f(t) = |r_ship − r_child| − R_soi`, stepping `f / v_rel,max` (never less than `R_soi / (100·v_rel,max)`), then Brent on the first sign change, so an entry can't be stepped over (a graze shallower than about 1% of the SOI may be missed). Ties go to impact, then exit, then entry. A segment that starts on an SOI boundary never ends less than 1 s later.
 3. At the event: transform the state to the new frame, apply the Δv, or start a thrust segment.
-4. Stop at a segment cap or at the time horizon.
+4. Stop after **5 segments** or at the **10-year horizon** from the trajectory's start.
+
+A ship's `orbit` is the state at the start of its **current** segment: it is re-based at every SOI event and at the horizon, so the current segment is always segment 0, and up to five patches are always computed ahead (decision 96).
 
 **Thrust segments** (milestone 3):
 
@@ -346,7 +353,9 @@ Ship and station stockpiles, facilities, crew and construction are advanced in *
 
 ## Clock and event queue
 
-- `clock` holds `t`, `warpRate` and `paused`. Each frame: `t += dt_wall × warpRate`, clamped so that it never passes the next event in the **priority queue**. Economy steps run for the sim time that passes.
+- `clock` holds `t`, the warp step and `paused`. Each frame, `advanceWorld` (`sim/world.ts`) aims for `t + min(dt_wall, 0.25 s) × warp`; while the next event in the **priority queue** is due by then, it sets `t` to the event's time exactly and dispatches it. Handlers may queue events, which run in the same frame if due. At most 256 events run per frame; past that, `t` stays at the last one and time runs slower rather than skipping events (decision 99). Economy steps run for the sim time that passes.
+- Each ship has **at most one pending event**: the end of its current segment (`soi-change`, `impact` or `trajectory-horizon`). An event carries the trajectory version it was queued for, and a handler ignores a stale one (decisions 99, 100).
+- **Derived data:** the trajectories and the event queue live in `world.derived`, and `rebuildDerived(world)` recomputes them from the ships. Saves strip `derived` and rebuild it, so the queue is never saved (decision 101).
 - Event sources:
   - plans: nodes, the start and end of arcs;
   - trajectories: SOI changes, closest approaches, docking, impact;
@@ -354,7 +363,7 @@ Ship and station stockpiles, facilities, crew and construction are advanced in *
   - knowledge: survey results;
   - the environment: storm warning and onset;
   - alarms, and scenario events.
-- Higher layers register their event handlers with `sim/events.ts`, so the queue doesn't import them.
+- Handlers are registered by event type in an `EventRegistry` object passed to `advanceWorld` (`sim/events.ts`), so the queue doesn't import higher layers and no module-level state is shared. The store creates the registry with the ship handlers.
 - At each event, the handler decides whether to pause, drop warp, or continue.
 - Physical state changes only at events: plan execution, docking, undocking, construction completion. **Preview time** is view state only. Rendering reads `viewTime`; the sim only advances `t`.
 

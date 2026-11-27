@@ -166,6 +166,42 @@ const cases: Case[] = [
     target: '../render/picking',
     expected: [],
   },
+  // Sprint 3 (planning/sprint-3.md, "Lint rules").
+  {
+    file: 'src/content/bad.ts',
+    code: "import { G0 } from '../math/units';\nexport const x = G0;\n",
+    target: '../math/units',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/sim/bad.ts',
+    code: "import { spawnShip } from '../game/actions';\nexport const x = spawnShip;\n",
+    target: '../game/actions',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/game/bad.ts',
+    code: "import { useWorld } from '../store/useWorld';\nexport const x = useWorld;\n",
+    target: '../store/useWorld',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/game/bad.ts',
+    code: 'export const x = Date.now();\n',
+    expected: [RESTRICTED_PROPERTY],
+  },
+  {
+    file: 'src/sim/ok.ts',
+    code: "import { registry } from '../content/registry';\nexport const x = registry;\n",
+    target: '../content/registry',
+    expected: [],
+  },
+  {
+    file: 'src/store/ok.ts',
+    code: "import { spawnShip } from '../game/actions';\nexport const x = spawnShip;\n",
+    target: '../game/actions',
+    expected: [],
+  },
   {
     file: 'src/misc/bad.ts',
     code: 'export const x = 1;\n',
