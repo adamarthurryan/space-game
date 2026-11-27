@@ -1,6 +1,6 @@
 # Milestones
 
-Open questions about milestones are tracked in [decisions.md](decisions.md). Each milestone builds on the one before and is playable on its own. Features are described in [features.md](features.md).
+Open questions about milestones are tracked in [decisions.md](../docs/decisions.md). Each milestone builds on the one before and is playable on its own. Features are described in [features.md](../docs/features.md).
 
 ## 1. Orbital sandbox
 
@@ -10,7 +10,9 @@ Open questions about milestones are tracked in [decisions.md](decisions.md). Eac
 - Fleets, the active ship, alarms, timeline and preview scrubbing.
 - Rendezvous and automatic docking.
 
-The `Segment` union (conic | thrust) is defined here, so that adding thrust arcs later doesn't mean reworking trajectories.
+Trajectory segments carry a `kind` discriminant and are always handled with exhaustive switches, so that adding thrust segments in milestone 3 doesn't mean reworking trajectories.
+
+Sprint breakdown: [milestone-1-sprints.md](milestone-1-sprints.md).
 
 ## 2. Discovery (gameplay phase 1)
 

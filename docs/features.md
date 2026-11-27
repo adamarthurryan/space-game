@@ -1,6 +1,6 @@
 # Game Features
 
-This document covers what the game does: its systems and rules. The vision behind it is in [gameplay-outline.md](gameplay-outline.md). How it is built is in [architecture.md](architecture.md), and how it is presented to the player is in [interface.md](interface.md). Unresolved items are marked **[Open]** and tracked in [decisions.md](decisions.md).
+This document covers what the game does: its systems and rules. The vision behind it is in [gameplay-concept.md](gameplay-concept.md). How it is built is in [architecture.md](architecture.md), and how it is presented to the player is in [interface.md](interface.md). Unresolved items are marked **[Open]** and tracked in [decisions.md](decisions.md).
 
 ## Scope
 
@@ -18,7 +18,7 @@ This document covers what the game does: its systems and rules. The vision behin
   - engines, propellant tanks, cargo holds, crew compartments;
   - power (solar arrays, fission reactor, fusion core), radiators, shielding;
   - tools (survey instruments, mining rigs, tug clamps).
-- **Part definitions** (backbones, modules, engines) live in structured text files, so new parts can be added and balanced without code changes.
+- **Part definitions** (backbones, modules, engines) live in content data files, separate from game code, so new parts can be added and balanced without code changes.
 - **Derived stats** shown for every design and ship:
   - dry and wet mass, mass and volume used vs. backbone limits;
   - thrust and Isp per engine, Δv for the current load, acceleration;
@@ -137,8 +137,8 @@ The tools are MechJeb-style helpers. **The game never suggests them**: they run 
 
 ## Alarms
 
-- Alarms can be set on a specific event, on an event type, or on a time. Their scope is a ship, a fleet, a station, or global. Each has a lead time, and either pauses or drops warp.
-- A fleet alarm also covers ships added to the fleet later. An alarm on a specific event survives replanning.
+- Alarms can be set on a maneuver node or thrust arc, on an event type (optionally for one target, such as "SOI entry into the Moon", and optionally only the next one), or on a time. Their scope is a ship, a fleet, a station, or global. Each has a lead time, and either pauses or drops warp.
+- A fleet alarm also covers ships added to the fleet later. Alarms survive replanning: an alarm on a node follows the node when it is edited, and is removed if the node is deleted.
 - **Default alarms**, on unless turned off: storm warnings, a stockpile running out, crew dose near its limit, a predicted impact, a route stopped.
 
 ## Progression and scenario

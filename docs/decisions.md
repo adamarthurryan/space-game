@@ -49,3 +49,11 @@ This is the single place for unresolved questions and settled decisions, for all
 | 23 | Docking | Cargo transfer while docked | Runs at a rate set by pumps and cranes, not instantly. |
 | 24 | Interface | Screens vs. map overlays | The Economy, Construction, Designer and Survey screens can be full-screen views, where that suits them. |
 | 25 | Scope | Atmospheric flight vs. the gameplay outline | The outline is updated: core gameplay is orbital, and abstract landing and atmospheric flight are later additions, mainly for resource extraction. |
+| 26 | Content | Content file format | Typed TypeScript data files (`satisfies`), not YAML. Refines decision 20: content is still data, separate from code. Type checking replaces the YAML loader and runtime schemas; a content test checks ID uniqueness and cross-references. |
+| 27 | Architecture | Threads | The sim runs on the main thread. A Web Worker runs heavy pure jobs (porkchop grid, Lambert sweeps). World state is plain data, so the whole sim can move to a worker later if profiling shows the need. |
+| 28 | Architecture | Determinism | Only reproducible generation and reproducible recomputation from a snapshot are required. Input replay is not a goal. |
+| 29 | Persistence | Saves | Saves hold the full world, bodies included; nothing is regenerated from the seed. Saves from another version are refused, not migrated, while the game is in development. |
+| 30 | Architecture | Known world | The known world is a display selector, not a separate copy of the world. Displayed orbits are true orbits offset by seeded noise scaled by the uncertainty. |
+| 31 | Alarms | Alarm triggers | Triggers are a plan item, an event type (optionally narrowed to a target, optionally once), or a time. Individual predicted events are not tracked across replans. |
+| 32 | Economy | Economy solver | Fixed sim-time steps (proposed 1 h), so ecosystem and population models can be non-linear. The analytic between-events solver is kept as an optimisation if needed. |
+| 33 | Architecture | Cross-layer rules | Rules that need higher layers (such as target knowledge for transfers) are checked in `game/actions.ts`. Route programs live in `economy/routes.ts`, not `planning/`. |
