@@ -2,6 +2,7 @@ import { calendarFromJd, jdFromSimTime } from '../../math/time';
 import { WARP_STEPS, warpStep } from '../../sim/clock';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import { formatDate, formatWarp } from '../format';
+import { PauseOnMenu } from './PauseOnMenu';
 import styles from './Timeline.module.css';
 
 /** Time controls, the event strip (sprint 5) and the date. */
@@ -53,6 +54,7 @@ export function Timeline() {
       >
         {formatWarp(warpStep(clock))}
       </output>
+      <PauseOnMenu />
       <div className={styles['strip']} />
       <output className={styles['readout']} aria-label="Date">
         {date}

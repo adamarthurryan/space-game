@@ -3,7 +3,7 @@ import { registry } from '../../content/registry';
 import { shipColor } from '../../render/shipStyle';
 import { getBody } from '../../sim/body';
 import { shipStats } from '../../sim/ship';
-import { useView } from '../../store/useView';
+import { resolveActiveShip, useView } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { formatSpeed } from '../format';
 import styles from './FleetList.module.css';
@@ -28,6 +28,10 @@ export function FleetList() {
   const world = useWorld((s) => s.world);
   const version = useWorld((s) => s.version);
   const selected = useView((s) => s.selected);
+  const activeId = resolveActiveShip(
+    world,
+    useView((s) => s.activeShipId),
+  );
   const formOpen = useView((s) => s.spawnFormOpen);
   const { select, focusOn, setSpawnFormOpen } = useView.getState();
 
@@ -109,7 +113,14 @@ export function FleetList() {
               <span className={styles['swatch']} style={{ color: r.color }} aria-hidden="true">
                 ▲
               </span>
-              <span className={styles['name']}>{r.name}</span>
+              <span className={styles['name']}>
+                {r.id === activeId && (
+                  <span className={styles['active']} aria-label="active ship" title="Active ship">
+                    ★{' '}
+                  </span>
+                )}
+                {r.name}
+              </span>
               <span className={styles['dv']}>{r.destroyed ? '' : r.dv}</span>
               <span className={styles['meta']}>
                 {r.design} · {r.destroyed ?? r.soi}
