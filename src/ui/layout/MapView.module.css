@@ -1,0 +1,8 @@
+.map {
+  grid-area: map;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-map-bg);
+}

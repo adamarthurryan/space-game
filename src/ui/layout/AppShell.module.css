@@ -1,0 +1,22 @@
+.shell {
+  --left-col: var(--left-width);
+  --right-col: var(--right-width);
+
+  display: grid;
+  grid-template-rows: var(--topbar-height) minmax(0, 1fr) var(--timeline-height);
+  grid-template-columns: var(--left-col) minmax(0, 1fr) var(--right-col);
+  grid-template-areas:
+    'top top top'
+    'left map right'
+    'timeline timeline timeline';
+  width: 100%;
+  height: 100%;
+}
+
+.shell[data-left='closed'] {
+  --left-col: 0px;
+}
+
+.shell[data-right='closed'] {
+  --right-col: 0px;
+}

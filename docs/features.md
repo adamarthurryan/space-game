@@ -30,14 +30,14 @@ This document covers what the game does: its systems and rules. The vision behin
 
 The engine types are listed below. Values are placeholders for balancing. Each type is defined as a part in a content file, so variants (for example, different chemical propellant pairs) are data, not new code. **[Open]** Which resources gate each type, and whether solar-electric and fusion drives are included.
 
-| Engine | Isp (s) | Thrust | Burn model | Power/heat | Notes |
-|--------|---------|--------|------------|------------|-------|
-| Chemical (e.g. LOX/LH2) | 300–460 | High (kN–MN) | Node, or a short finite burn | None | Cheap and simple. Cryogenic propellants need storage. |
-| Solid-core nuclear thermal | 850–1 000 | Medium–high (10–100s kN) | Finite burn (minutes to hours) | Reactor waste heat, shielding | Hydrogen propellant. Needs fissiles. |
-| Gas-core nuclear thermal | 1 500–5 000 | Medium–high | Finite burn | Very high heat, large radiators | Closed-cycle ("light bulb") at the low end of the Isp range, open-cycle at the high end. |
-| Nuclear electric (ion / Hall / MPD) | 2 000–10 000 | Very low (N) | Thrust arc (days to months) | A reactor at constant power, plus large radiators | Thrust doesn't depend on distance from the star. |
-| *Candidate:* solar electric | 1 500–5 000 | Very low (N) | Thrust arc | Solar arrays; thrust ∝ 1/r² | |
-| *Candidate:* fusion (realistic) | 10⁴–10⁵ | Low (milli-g) | Thrust arc | Very high heat | Low thrust only, never a torch ship (decision 8). |
+| Engine                              | Isp (s)      | Thrust                   | Burn model                     | Power/heat                                        | Notes                                                                                    |
+| ----------------------------------- | ------------ | ------------------------ | ------------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Chemical (e.g. LOX/LH2)             | 300–460      | High (kN–MN)             | Node, or a short finite burn   | None                                              | Cheap and simple. Cryogenic propellants need storage.                                    |
+| Solid-core nuclear thermal          | 850–1 000    | Medium–high (10–100s kN) | Finite burn (minutes to hours) | Reactor waste heat, shielding                     | Hydrogen propellant. Needs fissiles.                                                     |
+| Gas-core nuclear thermal            | 1 500–5 000  | Medium–high              | Finite burn                    | Very high heat, large radiators                   | Closed-cycle ("light bulb") at the low end of the Isp range, open-cycle at the high end. |
+| Nuclear electric (ion / Hall / MPD) | 2 000–10 000 | Very low (N)             | Thrust arc (days to months)    | A reactor at constant power, plus large radiators | Thrust doesn't depend on distance from the star.                                         |
+| _Candidate:_ solar electric         | 1 500–5 000  | Very low (N)             | Thrust arc                     | Solar arrays; thrust ∝ 1/r²                       |                                                                                          |
+| _Candidate:_ fusion (realistic)     | 10⁴–10⁵      | Low (milli-g)            | Thrust arc                     | Very high heat                                    | Low thrust only, never a torch ship (decision 8).                                        |
 
 ## Maneuvering
 
@@ -49,12 +49,12 @@ The engine types are listed below. Values are placeholders for balancing. Each t
 
 The tools are MechJeb-style helpers. **The game never suggests them**: they run only when the player picks one, and their output is ordinary, editable nodes and arcs.
 
-| Group | Tools |
-|-------|-------|
-| Orbit | Change Pe · Change Ap · Circularise · Change inclination · Change LAN |
-| Plane | Match planes with target |
-| Transfer | Hohmann · Bi-elliptic · Lambert intercept / porkchop · Return from moon · Transfer to L-point |
-| Rendezvous | Match velocity at closest approach · Fine-tune closest approach · Intercept target |
+| Group      | Tools                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------- |
+| Orbit      | Change Pe · Change Ap · Circularise · Change inclination · Change LAN                                      |
+| Plane      | Match planes with target                                                                                   |
+| Transfer   | Hohmann · Bi-elliptic · Lambert intercept / porkchop · Return from moon · Transfer to L-point              |
+| Rendezvous | Match velocity at closest approach · Fine-tune closest approach · Intercept target                         |
 | Low-thrust | Spiral out / in · Raise or lower orbit · Edelbaum estimate (an estimate only, not an optimised trajectory) |
 
 **Transfer planning requires known orbits.** A body can only be targeted once its orbit is known well enough (see [Survey and discovery](#survey-and-discovery)).
@@ -132,6 +132,7 @@ The tools are MechJeb-style helpers. **The game never suggests them**: they run 
   6. return.
 
   Each step is re-evaluated on every run, so the route adapts to new launch windows.
+
 - **Cargo rules** decide what is loaded and unloaded at each end.
 - Ships assigned to a route fly it without player input. Problems stop the ship and raise an alarm: a missed window, too little propellant, the destination full, or a storm forecast along the path.
 

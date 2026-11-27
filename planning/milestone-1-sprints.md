@@ -8,14 +8,14 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 
 **Not in milestone 1** (deferred to the milestone that owns it):
 
-| Deferred | Why | Milestone |
-|----------|-----|-----------|
-| Thrust segments, thrust arcs, finite execution of nodes, low-thrust tools | Impulsive only in milestones 1–2 (decision 18). Segments already carry a `kind` discriminant. | 3 |
-| Crew dose, radiation layer, porkchop dose overlay | Radiation environment arrives with discovery. | 2 |
-| True/known world split, orbit uncertainty bands | Every body is fully known in the sandbox. | 2 |
-| Ship designer, construction | Sandbox ships come from preset designs. | 2 |
-| Cargo transfer, mining, economy | Docking forms a stack, but nothing is exchanged. | 3 |
-| Fictional system generator | The real solar system only. | 2 |
+| Deferred                                                                  | Why                                                                                           | Milestone |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------- |
+| Thrust segments, thrust arcs, finite execution of nodes, low-thrust tools | Impulsive only in milestones 1–2 (decision 18). Segments already carry a `kind` discriminant. | 3         |
+| Crew dose, radiation layer, porkchop dose overlay                         | Radiation environment arrives with discovery.                                                 | 2         |
+| True/known world split, orbit uncertainty bands                           | Every body is fully known in the sandbox.                                                     | 2         |
+| Ship designer, construction                                               | Sandbox ships come from preset designs.                                                       | 2         |
+| Cargo transfer, mining, economy                                           | Docking forms a stack, but nothing is exchanged.                                              | 3         |
+| Fictional system generator                                                | The real solar system only.                                                                   | 2         |
 
 ## Sprint 0 — Foundations
 

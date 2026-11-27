@@ -29,7 +29,6 @@ Sprint breakdown: [milestone-1-sprints.md](milestone-1-sprints.md).
 - Mining by docking with minor bodies, and cargo transfer.
 - Depots, logistics routes (route programs), life support.
 
-
 ## 4. Expansion and advanced manufacturing (gameplay phases 3–4)
 
 - Construction, stations and habitats, towing.

@@ -1,0 +1,122 @@
+// Proves that the layer and determinism lint rules fire (planning/sprint-0.md, "Lint rules").
+// The code is linted in memory with lintText, so the bad files never exist on disk.
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ESLint } from 'eslint';
+import { describe, expect, it } from 'vitest';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const eslint = new ESLint({ cwd: root });
+
+const LAYER = 'boundaries/dependencies';
+const UNKNOWN_FILE = 'boundaries/no-unknown-files';
+const RESTRICTED_IMPORT = 'no-restricted-imports';
+const RESTRICTED_PROPERTY = 'no-restricted-properties';
+const RESTRICTED_SYNTAX = 'no-restricted-syntax';
+
+async function ruleIds(filePath: string, code: string): Promise<string[]> {
+  const [result] = await eslint.lintText(code, { filePath: resolve(root, filePath) });
+  if (!result) throw new Error('ESLint returned no result');
+  return result.messages.map((m) => m.ruleId ?? `(fatal) ${m.message}`).sort();
+}
+
+/**
+ * Boundaries ignores imports it can't resolve, so a case whose target doesn't exist would pass
+ * without testing anything. Each relative import target must exist.
+ */
+function expectTargetExists(fromFile: string, specifier: string): void {
+  const base = resolve(root, dirname(fromFile), specifier);
+  const found = ['.ts', '.tsx'].some((ext) => existsSync(base + ext));
+  expect(found, `import target ${specifier} from ${fromFile} must exist`).toBe(true);
+}
+
+interface Case {
+  file: string;
+  code: string;
+  expected: string[];
+  /** The relative import in `code`, if any, whose target must exist. */
+  target?: string;
+}
+
+const cases: Case[] = [
+  {
+    file: 'src/math/bad.ts',
+    code: "import { useView } from '../store/useView';\nexport const x = useView;\n",
+    target: '../store/useView',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/math/bad.ts',
+    code: "import * as THREE from 'three';\nexport const x = THREE;\n",
+    expected: [RESTRICTED_IMPORT],
+  },
+  {
+    file: 'src/math/bad.ts',
+    code: "import { useState } from 'react';\nexport const x = useState;\n",
+    expected: [RESTRICTED_IMPORT],
+  },
+  {
+    file: 'src/math/bad.ts',
+    code: 'export const x = Math.random();\n',
+    expected: [RESTRICTED_PROPERTY],
+  },
+  {
+    file: 'src/math/bad.ts',
+    code: 'export const x = Date.now();\n',
+    expected: [RESTRICTED_PROPERTY],
+  },
+  {
+    file: 'src/math/bad.ts',
+    code: 'export const x = new Date();\n',
+    expected: [RESTRICTED_SYNTAX],
+  },
+  {
+    file: 'src/render/bad.tsx',
+    code: "import { AppShell } from '../ui/layout/AppShell';\nexport const x = AppShell;\n",
+    target: '../ui/layout/AppShell',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/ui/ok.tsx',
+    code: "import { Scene } from '../render/Scene';\nexport const x = Scene;\n",
+    target: '../render/Scene',
+    expected: [],
+  },
+  {
+    file: 'src/render/ok.tsx',
+    code: "import { useView } from '../store/useView';\nexport const x = useView;\n",
+    target: '../store/useView',
+    expected: [],
+  },
+  {
+    file: 'src/render/ok.tsx',
+    code: 'export const x = Math.random();\n',
+    expected: [],
+  },
+  {
+    file: 'src/misc/bad.ts',
+    code: 'export const x = 1;\n',
+    expected: [UNKNOWN_FILE],
+  },
+];
+
+describe('layer and determinism lint rules', () => {
+  for (const c of cases) {
+    const firstLine = c.code.split('\n')[0];
+    const verdict = c.expected.length ? c.expected.join(', ') : 'no errors';
+    it(`${c.file}: ${firstLine} → ${verdict}`, async () => {
+      if (c.target) expectTargetExists(c.file, c.target);
+      expect(await ruleIds(c.file, c.code)).toEqual([...c.expected].sort());
+    });
+  }
+
+  // Becomes active when sprint 0 step 3 adds math/vec3.ts.
+  it.skipIf(!existsSync(resolve(root, 'src/math/vec3.ts')))(
+    "src/store/ok.ts: import { vec3 } from '../math/vec3' → no errors",
+    async () => {
+      const code = "import { vec3 } from '../math/vec3';\nexport const x = vec3;\n";
+      expect(await ruleIds('src/store/ok.ts', code)).toEqual([]);
+    },
+  );
+});

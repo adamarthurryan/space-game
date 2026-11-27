@@ -100,6 +100,7 @@ src/content/
 ```
 
 **Types:**
+
 - Resource IDs are the keys of the `resources` object, so a misspelt resource in a recipe, propellant or material list is a type error.
 - Every module type extends a **shared base type**, and adds only the fields its kind needs. Fields are added when the system that reads them is built (for example, landing capability flags arrive with landing).
 
@@ -114,22 +115,22 @@ export type ResourceId = keyof typeof resources;
 
 // types.ts
 interface ModuleBase {
-  id: string;                                  // unique across all module files
+  id: string; // unique across all module files
   name: string;
-  mass: number;                                // kg, dry
-  volume: number;                              // m³, counted against the backbone's limit
-  materials: Partial<Record<ResourceId, number>>;  // build cost, kg
-  unlock?: UnlockCondition;                    // resource-gated unlock (see features.md)
-  power?: number;                              // kW; negative = consumes (electric drives draw here)
-  heat?: number;                               // kW of waste heat
+  mass: number; // kg, dry
+  volume: number; // m³, counted against the backbone's limit
+  materials: Partial<Record<ResourceId, number>>; // build cost, kg
+  unlock?: UnlockCondition; // resource-gated unlock (see features.md)
+  power?: number; // kW; negative = consumes (electric drives draw here)
+  heat?: number; // kW of waste heat
   crewRequired?: number;
 }
 
 interface Engine extends ModuleBase {
   kind: 'chemical' | 'ntr-solid' | 'ntr-gas' | 'electric';
-  thrust: number;                              // N
-  isp: number;                                 // s
-  propellant: Partial<Record<ResourceId, number>>;  // mass ratio of each propellant consumed
+  thrust: number; // N
+  isp: number; // s
+  propellant: Partial<Record<ResourceId, number>>; // mass ratio of each propellant consumed
 }
 ```
 
@@ -156,6 +157,7 @@ export const engines = [
 ```
 
 **Checks:**
+
 - Type checking covers field names and types, and resource-ID references.
 - A Vitest content test covers what types can't: IDs unique across all files, module-ID references in structures and unlocks, and sanity checks (positive mass and volume, non-empty propellant for engines that need it). It runs with the rest of the test suite.
 - Content edits hot-reload in dev like any other module.
@@ -169,7 +171,7 @@ export const engines = [
 
 - **Units:** `km`, `s`, `kg`, `km/s`, `kW`, `mSv`. Time is seconds from the scenario epoch, as a float64 `number`.
 - **Precision:** a solar system spans ~10¹⁰ km, but docking happens at a few hundred metres. Float64 is enough, as long as relative positions between ships are computed in a frame local to the pair and not from heliocentric positions.
-- **Camera-relative rendering:** the GPU is float32. So every frame, positions minus the camera focus position are computed in float64, *then* converted to float32. Orbit and trajectory polylines are generated in the focus body's frame and re-based when focus changes.
+- **Camera-relative rendering:** the GPU is float32. So every frame, positions minus the camera focus position are computed in float64, _then_ converted to float32. Orbit and trajectory polylines are generated in the focus body's frame and re-based when focus changes.
 - **Display scale:** bodies are drawn at true size when close, with a minimum screen-space size. Zoom is logarithmic. Minor bodies use instanced rendering, and their orbit lines are only drawn on demand.
 
 ## Celestial bodies
@@ -195,13 +197,16 @@ export const engines = [
 A trajectory is an ordered list of segments. Every segment has a `kind` discriminant, and every consumer switches on it exhaustively (with a `never` check), so adding a segment kind makes the compiler list every place that must handle it.
 
 ```ts
-type Segment = ConicSegment;       // milestone 3 adds ThrustSegment
+type Segment = ConicSegment; // milestone 3 adds ThrustSegment
 
-interface ConicSegment {           // coasting, analytic
+interface ConicSegment {
+  // coasting, analytic
   kind: 'conic';
   parentId: BodyId;
-  r0: Vec3; v0: Vec3;              // state at tStart, in the parent frame
-  tStart: number; tEnd: number;
+  r0: Vec3;
+  v0: Vec3; // state at tStart, in the parent frame
+  tStart: number;
+  tEnd: number;
   endEvent: 'soi-exit' | 'soi-enter' | 'maneuver' | 'impact' | 'horizon';
   endTargetId?: BodyId;
 }
@@ -210,6 +215,7 @@ interface ConicSegment {           // coasting, analytic
 A conic segment stores its starting state vector, because universal-variable propagation works from it directly and stays robust for hyperbolic and near-parabolic orbits. Orbital elements (Pe, Ap, inclination, …) are derived from it for display.
 
 **Coasting propagation:**
+
 1. Universal-variable Kepler propagation, which handles elliptic, parabolic and hyperbolic orbits in one formulation.
 2. Find the earliest of these events: the next node or arc, SOI exit, SOI entry into a major child body (bracket and refine with root finding), or impact (`|r| < radius + atmosphere height`).
 3. At the event: transform the state to the new frame, apply the Δv, or start a thrust segment.
@@ -218,11 +224,13 @@ A conic segment stores its starting state vector, because universal-variable pro
 **Thrust segments** (milestone 3):
 
 ```ts
-interface ThrustSegment {          // engine on, numerically integrated
+interface ThrustSegment {
+  // engine on, numerically integrated
   kind: 'thrust';
   parentId: BodyId;
-  samples: Float64Array;           // [t, x, y, z, vx, vy, vz, m] per integrator step
-  tStart: number; tEnd: number;
+  samples: Float64Array; // [t, x, y, z, vx, vy, vz, m] per integrator step
+  tStart: number;
+  tEnd: number;
   endEvent: 'thrust-end' | 'soi-exit' | 'soi-enter' | 'propellant-out' | 'impact';
 }
 ```
@@ -235,16 +243,25 @@ interface ThrustSegment {          // engine on, numerically integrated
 **Plan representations:**
 
 ```ts
-interface ManeuverNode {           // impulsive (planning abstraction)
-  id: NodeId; shipId: ShipId; t: number; enabled: boolean;
-  dv: { prograde: number; normal: number; radial: number };   // km/s, local orbital frame
-  execution: 'impulsive' | 'finite';                         // 'finite' (milestone 3) = burn centred on t
+interface ManeuverNode {
+  // impulsive (planning abstraction)
+  id: NodeId;
+  shipId: ShipId;
+  t: number;
+  enabled: boolean;
+  dv: { prograde: number; normal: number; radial: number }; // km/s, local orbital frame
+  execution: 'impulsive' | 'finite'; // 'finite' (milestone 3) = burn centred on t
 }
 
-interface ThrustArc {              // explicit low-thrust burn (milestone 3)
-  id: ArcId; shipId: ShipId; enabled: boolean;
-  tStart: number; duration: number;
-  steering: SteeringMode; throttle: number;                   // 0–1
+interface ThrustArc {
+  // explicit low-thrust burn (milestone 3)
+  id: ArcId;
+  shipId: ShipId;
+  enabled: boolean;
+  tStart: number;
+  duration: number;
+  steering: SteeringMode;
+  throttle: number; // 0–1
   engineId: ModuleId;
 }
 ```
@@ -279,7 +296,7 @@ The world holds the **true** state. Each body also has a knowledge record. The U
 
 ```ts
 interface BodyKnowledge {
-  orbitSigma: number;              // position uncertainty, km; Infinity = undetected
+  orbitSigma: number; // position uncertainty, km; Infinity = undetected
   composition: 'unknown' | 'spectral-estimate' | 'assayed';
   compositionEstimate?: Record<ResourceId, [low: number, high: number]>;
   radiationBeltsMapped: boolean;
@@ -293,6 +310,7 @@ interface BodyKnowledge {
 ## Economy
 
 Ship and station stockpiles, facilities, crew and construction are advanced in **fixed sim-time steps** (proposed: 1 hour of sim time). In each step, the economy:
+
 1. resolves the rates at each location, limited by inputs, power, crew and storage, with facilities served in priority order;
 2. applies those rates for the step;
 3. raises events when a stockpile empties or fills, construction completes, or a threshold is crossed. These are accurate to one step.
@@ -326,13 +344,16 @@ Ship and station stockpiles, facilities, crew and construction are advanced in *
 ```ts
 interface Alarm {
   id: AlarmId;
-  scope: { kind: 'ship'; shipId: ShipId } | { kind: 'fleet'; fleetId: FleetId }
-       | { kind: 'station'; stationId: StationId } | { kind: 'global' };
+  scope:
+    | { kind: 'ship'; shipId: ShipId }
+    | { kind: 'fleet'; fleetId: FleetId }
+    | { kind: 'station'; stationId: StationId }
+    | { kind: 'global' };
   trigger:
-    | { kind: 'plan-item'; itemId: NodeId | ArcId }        // a node, or an arc's start
+    | { kind: 'plan-item'; itemId: NodeId | ArcId } // a node, or an arc's start
     | { kind: 'event-type'; type: SimEventType; targetId?: ObjectId; once?: boolean }
     | { kind: 'time'; t: number };
-  leadTime: number;                                       // seconds before the event
+  leadTime: number; // seconds before the event
   action: 'pause' | 'drop-warp';
 }
 ```

@@ -1,0 +1,44 @@
+.timeline {
+  grid-area: timeline;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--color-panel);
+  border-top: 1px solid var(--color-border);
+}
+
+.controls {
+  display: flex;
+  gap: 2px;
+}
+
+.button {
+  min-width: 28px;
+  height: 26px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+}
+
+.button:disabled {
+  opacity: 0.5;
+}
+
+.readout {
+  font-family: var(--font-mono);
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+
+.warp {
+  min-width: 4ch;
+}
+
+.strip {
+  flex: 1;
+  height: 18px;
+  background: var(--color-panel-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+}

@@ -56,24 +56,26 @@ Both side panels can be collapsed, so the map can fill the screen.
 
 The map is the main view. The other screens are **full-screen views where that suits them** (Economy, Construction and Ship designer all benefit from the space). Each has a keyboard shortcut, and the same key or Esc returns to the map. Clicking a location or object in a screen jumps to it on the map.
 
-| Screen | Purpose |
-|--------|---------|
-| Map | Navigation, planning, survey, the overview of everything |
-| Economy | Stockpiles by location, production and consumption rates, time to depletion or capacity, flows between locations |
-| Construction | Blueprints (locked and unlocked) and build queues per shipyard or site |
-| Ship designer | Configure a new ship design (or refit a docked one) from modules, with live derived stats |
-| Survey | Survey campaigns, the detection log, and assay results |
+| Screen        | Purpose                                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Map           | Navigation, planning, survey, the overview of everything                                                         |
+| Economy       | Stockpiles by location, production and consumption rates, time to depletion or capacity, flows between locations |
+| Construction  | Blueprints (locked and unlocked) and build queues per shipyard or site                                           |
+| Ship designer | Configure a new ship design (or refit a docked one) from modules, with live derived stats                        |
+| Survey        | Survey campaigns, the detection log, and assay results                                                           |
 
 ## 3D system map
 
 The map is always 3D. There is no separate 2D planning view.
 
 **Camera**
+
 - Orbit-style controls around a **focus object** (body, ship or station). Double-click an object, or click it in a sidebar list, to focus it. The camera animates smoothly to the new focus.
 - Logarithmic zoom covers the range from low orbit to the whole system in a few scroll steps.
 - **Plane snapping:** one keypress or button snaps the camera to look straight down on the plane of the ecliptic, or on the orbital plane of the selected body or ship. The view stays a 3D perspective camera, and orbiting the camera again leaves the snapped view.
 
 **Rendering of objects**
+
 - Bodies are drawn at true scale when close. When far away they appear as a fixed-size icon with a label. Labels are decluttered by priority (the focus and selection first, then larger bodies).
 - **Minor bodies** (asteroids, comets) are drawn as instanced points, coloured by known composition when the resource layer is on. Their orbit lines are only drawn when they are selected, targeted, or part of an active route.
 - **Undetected bodies are not drawn.** Detected bodies whose orbits are not yet well known are drawn as a fuzzy band or arc along the uncertain part of the orbit, instead of a dot.
@@ -89,6 +91,7 @@ The map is always 3D. There is no separate 2D planning view.
 - **Ghost positions:** when the timeline is scrubbed to a future time, every object is drawn at its position at that time. Optional "ghost" markers show where the target will be when the ship arrives.
 
 **Map layers** (toggled in the Filters panel):
+
 - body orbits; ship trajectories (all / active ship / active fleet / none); maneuver nodes and arcs; labels; SOI spheres;
 - **Lagrange points** (markers for L1–L5 of the selected body pair, or of all major pairs);
 - **radiation:** discovered radiation belts as translucent tori, coloured by dose rate. Active solar storms as an expanding shell from the star, with its arrival time at the active ship;
@@ -98,6 +101,7 @@ The map is always 3D. There is no separate 2D planning view.
 - **infrastructure:** stations, depots and shipyards.
 
 **Filters**
+
 - Toggle by category: planets, moons, minor bodies (by composition or size), stations (by type), ships (by role or fleet).
 - A search box (by name, or by composition such as "fissile").
 
@@ -106,6 +110,7 @@ The map is always 3D. There is no separate 2D planning view.
 The player manages a fleet of ships but **controls one ship at a time**, the **active ship** (marked ★).
 
 **Fleet list** (the Fleets tab):
+
 - Ships are grouped into named fleets. The player creates, renames and deletes fleets, and moves ships between them by dragging. Ships with no fleet appear under "Unassigned".
 - Each ship row shows:
   - its name, colour and engine type;
@@ -124,17 +129,20 @@ The player manages a fleet of ships but **controls one ship at a time**, the **a
 The core interaction should be quick, direct, and precise. It always applies to the active ship. Which tools the editor offers depends on the selected engine: **nodes** for high-thrust engines, **thrust arcs** for low-thrust ones. A ship with both kinds of engine can use both.
 
 **Nodes (impulsive)**
+
 - **Create:** hover over the active ship's trajectory. A ghost node follows the cursor along the path, showing the time and orbital position. Click to place it. Nodes can also be added from the inspector: "at next Pe", "at next Ap", "at AN/DN", or "at time T".
 - **Edit in 3D:** the selected node shows a gizmo with six handles (prograde/retrograde, normal/anti-normal, radial in/out). Dragging a handle changes that Δv component with **nonlinear sensitivity**: small drags give fine adjustments and large drags give coarse ones. Modifier keys switch to fine or coarse mode. Dragging the node itself along the trajectory changes its time.
 - **Edit numerically:** the inspector shows the node's time and Δv components as editable fields. They accept scroll-wheel nudges and typed values, with units.
 - **Finite execution:** a toggle executes the node as a real burn centred on the node time. When it is on, the actual path is drawn next to the impulsive prediction, so the player can see the difference.
 
 **Thrust arcs (low-thrust)**
+
 - **Create:** with a low-thrust engine selected, click-drag along the trajectory to sweep out a burn window. The resulting trajectory updates as the window grows.
 - **Edit:** drag the start and end handles of the arc along the trajectory. The inspector holds the start time, duration, throttle, and **steering mode** (prograde, retrograde, normal, anti-normal, radial, fixed inertial, toward target).
 - Arcs can be chained: for example, a long prograde spiral, a coast, then a retrograde capture spiral.
 
 **Live feedback while editing** (the trajectory recomputes as you drag; long arcs show a coarse preview first, then refine when the drag ends):
+
 - Δv used and the ship's remaining Δv. The remaining Δv turns red when the plan is over budget.
 - Propellant used, by tank type.
 - Burn duration (for nodes), with a warning when it is long relative to the orbital period.
@@ -149,13 +157,13 @@ The core interaction should be quick, direct, and precise. It always applies to 
 
 The active ship has a **Plan ▾** menu in the inspector, which works much like MechJeb's maneuver planner. Each tool asks for a few parameters, shows a preview of the result on the map, and adds ordinary, editable nodes or arcs when the player confirms.
 
-| Group | Tools |
-|-------|-------|
-| Orbit | Change Pe · Change Ap · Circularise (at Pe / Ap / after time) · Change inclination · Change LAN |
-| Plane | Match planes with target (at AN/DN) |
-| Transfer | Hohmann to target · Bi-elliptic · Intercept at time (Lambert) · Return from moon · Transfer to L-point · Porkchop planner (below) |
-| Rendezvous | Match velocity at closest approach · Fine-tune closest approach · Intercept target |
-| Low-thrust | Spiral out to escape · Spiral in to capture · Raise/lower orbit · Edelbaum transfer estimate |
+| Group      | Tools                                                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Orbit      | Change Pe · Change Ap · Circularise (at Pe / Ap / after time) · Change inclination · Change LAN                                   |
+| Plane      | Match planes with target (at AN/DN)                                                                                               |
+| Transfer   | Hohmann to target · Bi-elliptic · Intercept at time (Lambert) · Return from moon · Transfer to L-point · Porkchop planner (below) |
+| Rendezvous | Match velocity at closest approach · Fine-tune closest approach · Intercept target                                                |
+| Low-thrust | Spiral out to escape · Spiral in to capture · Raise/lower orbit · Edelbaum transfer estimate                                      |
 
 **The game does not suggest tools.** It shows no hints like "you could circularise here", raises no tool prompts on events, and does nothing automatically. The tools stay in the menu until the player opens it. Working out which maneuver to make is the game; the tools only save the player from the arithmetic.
 
@@ -232,7 +240,8 @@ The designer is free-form, with no hull classes and no 3D layout (see [features.
   - stockpile limits, construction completion, survey results;
   - solar storms, game events.
 
-  Events are coloured per object. Alarms show as ⏰ markers. Hovering shows details; clicking jumps the *preview* to that time.
+  Events are coloured per object. Alarms show as ⏰ markers. Hovering shows details; clicking jumps the _preview_ to that time.
+
 - Clicking an event in the timeline strip allows setting an alarm for that event.
 - **Preview scrubbing:** dragging the playhead forward lets you look at the future. It does not commit time. A clear visual mode (a tinted border and a "PREVIEW" badge) shows when the map is not at "now". Release or press Esc to return.
 - Warp automatically drops at alarms and every event that needs a decision.
@@ -251,6 +260,7 @@ The designer is free-form, with no hull classes and no 3D layout (see [features.
 ## Inspector panel
 
 The content depends on the selection:
+
 - **Body:**
   - physical data, orbital elements and their uncertainty, SOI radius;
   - knowledge state, composition (estimate or assay), radiation belts;
@@ -271,6 +281,7 @@ The content depends on the selection:
 ## Transfer planner
 
 The porkchop planner is the most detailed of the transfer tools. It opens as a dialog, from "plan transfer" or from the Plan ▾ menu, for the active ship and a target:
+
 - A **porkchop plot** of total Δv by departure date and time of flight, computed with the Lambert solver. Clicking a cell previews that transfer on the map. "Apply" creates the departure node, and optionally a capture node.
 - **Dose overlay:** a toggle colours the plot by crew dose (time of flight × environment) instead of Δv. This shows the trade-off between a cheap, slow transfer and a fast, expensive one.
 - A quick Hohmann estimate and the phase angle / next window, shown as a list for players who don't want to read a porkchop plot.

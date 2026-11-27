@@ -1,0 +1,7 @@
+dist
+coverage
+package-lock.json
+
+# Prose docs keep their own hand formatting.
+*.md
+test/smoke/out

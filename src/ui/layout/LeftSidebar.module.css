@@ -1,0 +1,54 @@
+.sidebar {
+  grid-area: left;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--color-panel);
+  border-right: 1px solid var(--color-border);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+  padding: 6px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-dim);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+}
+
+.panel {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-text-dim);
+}
+
+.filters {
+  border-top: 1px solid var(--color-border);
+  padding: 6px 10px;
+}
+
+.filters summary {
+  cursor: pointer;
+  color: var(--color-text-dim);
+}
