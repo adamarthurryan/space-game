@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useView } from '../../store/useView';
 import { AppShell } from './AppShell';
 
-// jsdom has no WebGL, so the R3F canvas is replaced with a stub.
+// jsdom has no WebGL, so the map canvas is replaced with a stub.
 vi.mock('../../render/Scene', () => ({
   Scene: () => <div data-testid="scene-stub" />,
 }));
@@ -59,7 +59,7 @@ describe('AppShell', () => {
     expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeTruthy();
   });
 
-  it('selects the Fleets tab and shows its placeholder', async () => {
+  it('selects the Fleets tab and shows the ship list', async () => {
     const user = userEvent.setup();
     render(<AppShell />);
     const fleets = screen.getByRole('tab', { name: 'Fleets' });
@@ -68,7 +68,18 @@ describe('AppShell', () => {
     await user.click(fleets);
     expect(fleets.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: 'System' }).getAttribute('aria-selected')).toBe('false');
-    expect(within(screen.getByRole('tabpanel')).getByText('No ships yet.')).toBeTruthy();
+    const panel = screen.getByRole('tabpanel');
+    expect(within(panel).queryByText('No ships yet.')).toBeNull();
+    expect(within(panel).getByRole('option', { name: 'Kestrel' })).toBeTruthy();
+  });
+
+  it('switches the inspector between a body and a ship', () => {
+    render(<AppShell />);
+    const inspector = screen.getByRole('complementary', { name: 'Inspector' });
+    act(() => useView.getState().select({ kind: 'body', id: 'mars' }));
+    expect(within(inspector).getByRole('heading', { name: 'Mars' })).toBeTruthy();
+    act(() => useView.getState().select({ kind: 'ship', id: 'ship-2' }));
+    expect(within(inspector).getByRole('heading', { name: 'Tern' })).toBeTruthy();
   });
 
   it('shows the body tree in the System tab', () => {
