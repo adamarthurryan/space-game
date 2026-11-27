@@ -37,6 +37,7 @@ Development planning is in the `planning` folder:
 - `milestones.md` — the high-level development milestones
 - `milestone-1-sprints.md` — the sprints of milestone 1
 - `sprint-0.md` — the detailed plan of sprint 0
+- other sprints and milestones have similar files
 
 Source code is in `src/`, one folder per layer (see "Layered structure" in `docs/architecture.md`). A layer may import only the layers below it; `npm run lint` enforces this.
 
