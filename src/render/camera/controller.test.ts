@@ -18,12 +18,22 @@ import {
   zoomBy,
   type CameraController,
 } from './controller';
-import { framingDistance, MAX_DISTANCE, minDistance } from './framing';
+import type { MapObjectRef } from '../../store/useView';
+import { shipStateAt } from '../../sim/ship';
+import { orbitPoleOf } from './CameraStage';
+import {
+  framingDistance,
+  framingDistanceOf,
+  MAX_DISTANCE,
+  minDistance,
+  minDistanceOf,
+} from './framing';
 
 const sys = createSandboxWorld().system;
+const body = (id: string): MapObjectRef => ({ kind: 'body', id });
 
 function earthController(): CameraController {
-  return createController('earth', framingDistance(sys, 'earth'), minDistance(sys, 'earth'));
+  return createController(body('earth'), framingDistance(sys, 'earth'), minDistance(sys, 'earth'));
 }
 
 /** Steps until the animations settle. */
@@ -169,8 +179,8 @@ describe('snap', () => {
 
 describe('refocus', () => {
   const warp = 1e6;
-  const focusWorld = (t: () => number) => (id: string, out: Vec3) => {
-    const r = bodyWorldState(sys, id, t()).r;
+  const focusWorld = (t: () => number) => (ref: MapObjectRef, out: Vec3) => {
+    const r = bodyWorldState(sys, ref.id, t()).r;
     out.x = r.x;
     out.y = r.y;
     out.z = r.z;
@@ -183,7 +193,7 @@ describe('refocus', () => {
     const c = earthController();
     const origin = vec3(0, 0, 0);
     controllerOriginInto(c, world, origin);
-    beginRefocus(c, 'mars', framingDistance(sys, 'mars'), minDistance(sys, 'mars'));
+    beginRefocus(c, body('mars'), framingDistance(sys, 'mars'), minDistance(sys, 'mars'));
     let last = { ...controllerOriginInto(c, world, origin) };
     expect(norm(sub(last, bodyWorldState(sys, 'earth', 0).r))).toBe(0);
 
@@ -206,8 +216,62 @@ describe('refocus', () => {
 
   it('applies the new minimum distance', () => {
     const c = earthController();
-    beginRefocus(c, 'phobos', framingDistance(sys, 'phobos'), minDistance(sys, 'phobos'));
+    beginRefocus(c, body('phobos'), framingDistance(sys, 'phobos'), minDistance(sys, 'phobos'));
     zoomBy(c, -100);
     expect(10 ** c.target.logDistance).toBeCloseTo(minDistance(sys, 'phobos'), 6);
+  });
+});
+
+describe('ships', () => {
+  const world = createSandboxWorld();
+  const kestrel: MapObjectRef = { kind: 'ship', id: 'ship-1' };
+  /** Earth or Kestrel, world positions at t. */
+  const at = (t: number) => (ref: MapObjectRef, out: Vec3) => {
+    const earth = bodyWorldState(world.system, 'earth', t).r;
+    const r =
+      ref.kind === 'ship'
+        ? (() => {
+            const s = shipStateAt(world.system, world.ships[ref.id]!, t).r;
+            return vec3(earth.x + s.x, earth.y + s.y, earth.z + s.z);
+          })()
+        : bodyWorldState(world.system, ref.id, t).r;
+    out.x = r.x;
+    out.y = r.y;
+    out.z = r.z;
+    return out;
+  };
+
+  it('a refocus from Earth to a LEO ship keeps the origin continuous and ends on the ship', () => {
+    const c = earthController();
+    const origin = vec3(0, 0, 0);
+    let t = 0;
+    controllerOriginInto(c, at(t), origin);
+    beginRefocus(c, kestrel, framingDistanceOf(world, kestrel), minDistanceOf(world, kestrel));
+    let last = { ...controllerOriginInto(c, at(t), origin) };
+    const dt = 1 / 60;
+    // 6771 km apart; the blend moves at most 3 × gap × dt / duration, plus 8 km/s of orbit.
+    const bound = (3 * 6800 * dt) / REFOCUS_DURATION + 40 * dt;
+    for (let i = 0; i < 60; i++) {
+      t += dt;
+      stepController(c, dt);
+      const now = controllerOriginInto(c, at(t), origin);
+      expect(norm(sub(now, last))).toBeLessThan(bound);
+      last = { ...now };
+    }
+    expect(c.refocus).toBeNull();
+    expect(c.focus).toEqual(kestrel);
+    expect(norm(sub(last, at(t)(kestrel, vec3(0, 0, 0))))).toBe(0);
+  });
+
+  it("a snap to a ship's orbit pole looks down −h/|h|", () => {
+    const c = earthController();
+    const pole = orbitPoleOf(world, kestrel)!;
+    const s = shipStateAt(world.system, world.ships['ship-1']!, world.clock.t);
+    const h = cross(s.r, s.v);
+    expect(angleBetween(pole, h)).toBeLessThan(1e-12);
+    beginSnap(c, pole);
+    settle(c);
+    const f = controllerPose(c).forward;
+    expect(norm(sub(f, vec3(-h.x / norm(h), -h.y / norm(h), -h.z / norm(h))))).toBeLessThan(1e-9);
   });
 });

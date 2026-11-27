@@ -195,6 +195,7 @@ export function sandboxShips(
           periapsisAltitude: 300,
           e: (tern.ra - tern.rp) / (tern.ra + tern.rp),
           i: 28.5 * DEG,
+          lan: 40 * DEG,
         },
         0,
       ),

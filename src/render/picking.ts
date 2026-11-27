@@ -1,7 +1,9 @@
 /**
- * Screen-space picking (decision S2-14 in planning/sprint-2.md): one path for discs, labels
- * and markers, reading the MapFrame's projection. Priority: a disc under the cursor (the
- * nearest) > a label under the cursor > the nearest marker within reach.
+ * Screen-space picking (decision S2-14 in planning/sprint-2.md, S3-20 in sprint-3.md): one path
+ * for ships, discs, labels and markers, reading the MapFrame's projection. Priority: the nearest
+ * ship marker within reach that isn't behind a nearer disc > a disc under the cursor (the
+ * nearest) > a label under the cursor > the nearest body marker within reach. Ships come first
+ * because they are tiny and sit in front of their parent's disc.
  */
 
 import type { MapObjectRef } from '../store/useView';
@@ -20,6 +22,20 @@ export function pick(
   radiusPx = PICK_RADIUS_PX,
 ): MapObjectRef | null {
   const n = frame.order.length;
+
+  // 0. Ship markers.
+  const fs = frame.ships;
+  let bestShip = -1;
+  let bestShipD = radiusPx;
+  for (let k = 0; k < fs.ids.length; k++) {
+    if (!fs.markerShown[k]) continue;
+    const d = Math.hypot(x - fs.screenX[k]!, y - fs.screenY[k]!);
+    if (d <= bestShipD && !behindDisc(frame, fs.screenX[k]!, fs.screenY[k]!, fs.depth[k]!)) {
+      bestShipD = d;
+      bestShip = k;
+    }
+  }
+  if (bestShip >= 0) return { kind: 'ship', id: fs.ids[bestShip]! };
 
   // 1. Discs: the nearest one whose drawn sphere contains the cursor.
   let best = -1;
@@ -47,4 +63,13 @@ export function pick(
     }
   }
   return best >= 0 ? { kind: 'body', id: frame.order[best]! } : null;
+}
+
+/** Whether a point at (x, y) and `depth` is behind a nearer drawn disc. */
+function behindDisc(frame: MapFrame, x: number, y: number, depth: number): boolean {
+  for (let i = 0; i < frame.order.length; i++) {
+    if (!frame.sphereShown[i] || !(frame.depth[i]! < depth)) continue;
+    if (Math.hypot(x - frame.screenX[i]!, y - frame.screenY[i]!) < frame.discPx[i]!) return true;
+  }
+  return false;
 }

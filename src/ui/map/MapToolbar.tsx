@@ -5,10 +5,14 @@ import styles from './MapToolbar.module.css';
 /** Snap and focus buttons over the map (S2-12, S2-20), with their keys. */
 export function MapToolbar() {
   const selected = useView((s) => s.selected);
-  const system = useWorld((s) => s.world.system);
+  const world = useWorld((s) => s.world);
+  // Ships change status as the sim runs; the version says when.
+  useWorld((s) => s.version);
   const { snapTo, focusOn } = useView.getState();
-  const body = selected ? system.bodies[selected.id] : undefined;
-  const hasOrbit = !!body?.orbit;
+  const ship = selected?.kind === 'ship' ? world.ships[selected.id] : undefined;
+  const body = selected?.kind === 'body' ? world.system.bodies[selected.id] : undefined;
+  const name = ship?.name ?? body?.name;
+  const hasOrbit = ship ? ship.status === 'coasting' : !!body?.orbit;
 
   return (
     <div className={styles['toolbar']} role="toolbar" aria-label="Map">
@@ -25,9 +29,7 @@ export function MapToolbar() {
         className={styles['button']}
         disabled={!hasOrbit}
         onClick={() => snapTo('selected-orbit')}
-        title={
-          hasOrbit ? `Look down on ${body!.name}'s orbit (P)` : 'Select a body with an orbit first'
-        }
+        title={hasOrbit ? `Look down on ${name}'s orbit (P)` : 'Select a body with an orbit first'}
       >
         Orbit plane<span className={styles['key']}>P</span>
       </button>
@@ -36,7 +38,7 @@ export function MapToolbar() {
         className={styles['button']}
         disabled={!selected}
         onClick={() => selected && focusOn(selected)}
-        title={body ? `Focus ${body.name} (F)` : 'Select a body first'}
+        title={name ? `Focus ${name} (F)` : 'Select a body first'}
       >
         Focus<span className={styles['key']}>F</span>
       </button>

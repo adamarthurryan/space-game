@@ -9,11 +9,12 @@ import type { BodyId } from '../sim/body';
 import type { EventRegistry } from '../sim/events';
 import { advanceWorld, type World } from '../sim/world';
 import type { MapObjectRef } from '../store/useView';
-import { updateFrameBodies, type MapFrame } from './mapFrame';
+import { syncFrameShips, updateFrameBodies, updateFrameShips, type MapFrame } from './mapFrame';
 import {
   measureLabels,
   placeLabels,
   updateLabelCandidates,
+  updateShipLabelCandidates,
   type LabelRegistry,
 } from './overlays/labelLayout';
 import { projectFrame } from './projection';
@@ -63,9 +64,18 @@ export function bodiesStage(frame: MapFrame, world: World): void {
   updateFrameBodies(frame, world.system, world.clock.t);
 }
 
-/** Projection stage: screen positions, discs, markers and merging (S2-7). */
-export function projectionStage(frame: MapFrame, world: World): void {
-  projectFrame(frame, world.system);
+/**
+ * Ships stage (S3-2): the drawn ship set (arrays reallocated only when it changes), and each
+ * ship's world position at the new t.
+ */
+export function shipsStage(frame: MapFrame, world: World): void {
+  syncFrameShips(frame, world);
+  updateFrameShips(frame, world);
+}
+
+/** Projection stage: screen positions, discs, markers and merging (S2-7, S3-20). */
+export function projectionStage(frame: MapFrame, world: World, view: ViewSnapshot): void {
+  projectFrame(frame, world.system, view);
 }
 
 /** Labels stage: candidates, declutter, and the span positions (S2-15). */
@@ -77,5 +87,6 @@ export function labelsStage(
 ): void {
   measureLabels(reg);
   updateLabelCandidates(reg, frame, world.system, view);
+  updateShipLabelCandidates(reg, frame, world, view);
   placeLabels(reg, frame);
 }

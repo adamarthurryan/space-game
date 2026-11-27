@@ -5,10 +5,13 @@
  */
 
 import { getBody, type BodySystem } from '../../sim/body';
+import type { ShipId } from '../../sim/ship';
+import type { World } from '../../sim/world';
 import type { MapObjectRef } from '../../store/useView';
 import { bodyStyle } from '../bodyStyle';
 import type { MapFrame } from '../mapFrame';
-import { declutter, labelPriority, type LabelCandidate } from './declutter';
+import { SHIP_MARKER_PX } from '../shipStyle';
+import { declutter, labelPriority, shipLabelPriority, type LabelCandidate } from './declutter';
 
 /** Gap between a marker or disc and its label, px. */
 export const LABEL_GAP_PX = 4;
@@ -21,6 +24,13 @@ export interface LabelRegistry {
   /** 1 if placed this frame. */
   placed: Uint8Array;
   candidates: LabelCandidate[];
+  /** Ship label spans by ship ID, registered by the overlay. */
+  shipSpans: Map<ShipId, HTMLElement>;
+  /** Measured ship label sizes, by ID: [width, height]. */
+  shipSizes: Map<ShipId, [number, number]>;
+  /** Ship candidates, in frame.ships order; rebuilt when that array changes. */
+  shipCandidates: LabelCandidate[];
+  shipCandidatesFor: readonly ShipId[] | null;
 }
 
 export function createLabelRegistry(frame: MapFrame): LabelRegistry {
@@ -39,16 +49,22 @@ export function createLabelRegistry(frame: MapFrame): LabelRegistry {
       priority: 0,
       hidden: true,
     })),
+    shipSpans: new Map(),
+    shipSizes: new Map(),
+    shipCandidates: [],
+    shipCandidatesFor: null,
   };
 }
 
 /** Whether body i's centre is behind a nearer body's drawn disc. */
 function occluded(frame: MapFrame, i: number): boolean {
-  const x = frame.screenX[i]!;
-  const y = frame.screenY[i]!;
-  const depth = frame.depth[i]!;
+  return occludedAt(frame, frame.screenX[i]!, frame.screenY[i]!, frame.depth[i]!, i);
+}
+
+/** Whether a point is behind a nearer drawn disc (other than body `self`). */
+function occludedAt(frame: MapFrame, x: number, y: number, depth: number, self = -1): boolean {
   for (let j = 0; j < frame.order.length; j++) {
-    if (j === i || !frame.sphereShown[j] || !(frame.depth[j]! < depth)) continue;
+    if (j === self || !frame.sphereShown[j] || !(frame.depth[j]! < depth)) continue;
     if (Math.hypot(x - frame.screenX[j]!, y - frame.screenY[j]!) < frame.discPx[j]!) return true;
   }
   return false;
@@ -80,6 +96,44 @@ export function updateLabelCandidates(
   }
 }
 
+/** Fills `reg.shipCandidates` from the frame's ship projection (S3-20). */
+export function updateShipLabelCandidates(
+  reg: LabelRegistry,
+  frame: MapFrame,
+  world: World,
+  view: { focus: MapObjectRef; selected: MapObjectRef | null; hovered: MapObjectRef | null },
+): void {
+  const fs = frame.ships;
+  if (reg.shipCandidatesFor !== fs.ids) {
+    reg.shipCandidates = fs.ids.map((id) => ({
+      ref: { kind: 'ship', id },
+      anchorX: 0,
+      anchorY: 0,
+      width: 0,
+      height: 0,
+      priority: 0,
+      hidden: true,
+    }));
+    reg.shipCandidatesFor = fs.ids;
+  }
+  for (let k = 0; k < fs.ids.length; k++) {
+    const c = reg.shipCandidates[k]!;
+    const size = reg.shipSizes.get(fs.ids[k]!);
+    const ship = world.ships[fs.ids[k]!];
+    c.hidden =
+      !ship ||
+      !size ||
+      !fs.markerShown[k] ||
+      occludedAt(frame, fs.screenX[k]!, fs.screenY[k]!, fs.depth[k]!);
+    if (c.hidden || !size || !ship) continue;
+    c.anchorX = fs.screenX[k]! + SHIP_MARKER_PX / 2 + LABEL_GAP_PX;
+    c.anchorY = fs.screenY[k]!;
+    c.width = size[0];
+    c.height = size[1];
+    c.priority = shipLabelPriority(ship.seq, c.ref, view);
+  }
+}
+
 /** Measures labels not measured yet (a layout read, once per label in practice). */
 export function measureLabels(reg: LabelRegistry): void {
   for (let i = 0; i < reg.spans.length; i++) {
@@ -88,22 +142,38 @@ export function measureLabels(reg: LabelRegistry): void {
     reg.widths[i] = span.offsetWidth;
     reg.heights[i] = span.offsetHeight;
   }
+  for (const [id, span] of reg.shipSpans) {
+    if (!reg.shipSizes.has(id) && span.offsetWidth > 0) {
+      reg.shipSizes.set(id, [span.offsetWidth, span.offsetHeight]);
+    }
+  }
 }
+
+const placedShips = new Set<ShipId>();
 
 /** Places the labels, records them on the frame for picking, and positions the spans. */
 export function placeLabels(reg: LabelRegistry, frame: MapFrame): void {
-  frame.labels = declutter(reg.candidates, {
+  const cands =
+    reg.shipCandidates.length > 0 ? reg.candidates.concat(reg.shipCandidates) : reg.candidates;
+  frame.labels = declutter(cands, {
     x: 0,
     y: 0,
     w: frame.camera.width,
     h: frame.camera.height,
   });
   reg.placed.fill(0);
+  placedShips.clear();
   for (const l of frame.labels) {
-    const i = frame.indexOf[l.ref.id];
-    if (i === undefined) continue;
-    reg.placed[i] = 1;
-    const span = reg.spans[i];
+    let span: HTMLElement | null | undefined;
+    if (l.ref.kind === 'ship') {
+      placedShips.add(l.ref.id);
+      span = reg.shipSpans.get(l.ref.id);
+    } else {
+      const i = frame.indexOf[l.ref.id];
+      if (i === undefined) continue;
+      reg.placed[i] = 1;
+      span = reg.spans[i];
+    }
     if (span) {
       span.style.transform = `translate(${l.rect.x.toFixed(1)}px, ${l.rect.y.toFixed(1)}px)`;
     }
@@ -111,5 +181,8 @@ export function placeLabels(reg: LabelRegistry, frame: MapFrame): void {
   for (let i = 0; i < reg.spans.length; i++) {
     const span = reg.spans[i];
     if (span) span.style.visibility = reg.placed[i] ? 'visible' : 'hidden';
+  }
+  for (const [id, span] of reg.shipSpans) {
+    span.style.visibility = placedShips.has(id) ? 'visible' : 'hidden';
   }
 }

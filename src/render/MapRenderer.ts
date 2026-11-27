@@ -17,13 +17,14 @@ import { attachPointerInput } from './input/pointerInput';
 import { BodyLayer } from './layers/BodyLayer';
 import { MarkerLayer } from './layers/MarkerLayer';
 import { OrbitLayer } from './layers/OrbitLayer';
-import type { MapFrame } from './mapFrame';
+import { frameBodyOf, type MapFrame } from './mapFrame';
 import type { LabelRegistry } from './overlays/labelLayout';
 import {
   bodiesStage,
   clockStage,
   labelsStage,
   projectionStage,
+  shipsStage,
   STAGES,
   type MapLayer,
   type StageName,
@@ -78,7 +79,8 @@ export class MapRenderer {
       new OrbitLayer(this.scene, frame, world.system),
       new MarkerLayer(this.scene, frame, world.system),
     ];
-    this.view = this.readView();
+    for (const l of this.layers) l.sync?.(world);
+    this.view = this.readView(world);
 
     this.detach.push(attachPointerInput(canvas, frame));
     this.detach.push(attachCameraInput(canvas, this.cameraStage.controller));
@@ -136,9 +138,9 @@ export class MapRenderer {
     this.camera.updateProjectionMatrix();
   }
 
-  private readView(): ViewSnapshot {
+  private readView(world: World): ViewSnapshot {
     const { focus, selected, hovered } = useView.getState();
-    return { focus, selected, hovered, frameBodyId: focus.id };
+    return { focus, selected, hovered, frameBodyId: frameBodyOf(world, focus) };
   }
 
   /** One frame: every stage in order, then the draw. */
@@ -160,15 +162,16 @@ export class MapRenderer {
         bodiesStage(frame, world);
         return;
       case 'ships':
+        this.view = this.readView(world);
+        shipsStage(frame, world);
         return;
       case 'camera':
         this.cameraStage.update(frame, this.dtWall, this.width, this.height, this.pixelRatio);
         return;
       case 'projection':
-        projectionStage(frame, world);
+        projectionStage(frame, world, this.view);
         return;
       case 'layers':
-        this.view = this.readView();
         for (const l of this.layers) l.update(frame, this.view);
         return;
       case 'labels':

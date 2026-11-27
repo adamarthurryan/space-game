@@ -29,7 +29,8 @@ function createProbes() {
       if (!c) throw new Error('no camera yet');
       const pose = controllerPose(c);
       return {
-        focusId: c.focusId,
+        focusId: c.focus.id,
+        focusKind: c.focus.kind,
         yaw: c.yaw,
         pitch: c.pitch,
         distance: 10 ** c.logDistance,
@@ -57,7 +58,28 @@ function createProbes() {
     },
     /** The labels placed this frame. */
     labels() {
-      return frame().labels.map((l) => ({ id: l.ref.id, ...l.rect }));
+      return frame().labels.map((l) => ({ id: l.ref.id, kind: l.ref.kind, ...l.rect }));
+    },
+    /** A drawn ship's projection (S3-22); null if it isn't drawn (destroyed). */
+    ship(id: string) {
+      const fs = frame().ships;
+      const k = fs.indexOf[id];
+      if (k === undefined) return null;
+      return {
+        x: fs.screenX[k]!,
+        y: fs.screenY[k]!,
+        depth: fs.depth[k]!,
+        marker: fs.markerShown[k] === 1,
+        merged: fs.merged[k] === 1,
+      };
+    },
+    /** Every ship's ID, name and status. */
+    ships() {
+      return Object.values(useWorld.getState().world.ships).map((s) => ({
+        id: s.id,
+        name: s.name,
+        status: s.status,
+      }));
     },
     /** A body's orbit normal at the current sim time. */
     orbitNormal(id: string) {

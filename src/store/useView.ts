@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 import type { BodyId } from '../sim/body';
+import type { ShipId } from '../sim/ship';
 
-/** Something on the map that can be selected, hovered or focused. Sprint 3 adds ships. */
-export type MapObjectRef = { kind: 'body'; id: BodyId };
+/** Something on the map that can be selected, hovered or focused (S3-15). */
+export type MapObjectRef = { kind: 'body'; id: BodyId } | { kind: 'ship'; id: ShipId };
+
+/** Whether two refs name the same object. */
+export const sameRef = (a: MapObjectRef | null, b: MapObjectRef | null): boolean =>
+  a === b || (a !== null && b !== null && a.kind === b.kind && a.id === b.id);
 
 /** Planes the camera can snap to (S2-12). */
 export type SnapPlane = 'ecliptic' | 'selected-orbit';

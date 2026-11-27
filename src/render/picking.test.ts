@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../gen/scenario';
-import { createMapFrame, type MapFrame } from './mapFrame';
+import { createMapFrame, syncFrameShips, type MapFrame } from './mapFrame';
 import { pick } from './picking';
 
 const { system } = createSandboxWorld();
@@ -66,5 +66,31 @@ describe('pick', () => {
     f.depth[f.indexOf['saturn']!] = Infinity;
     f.markerShown[f.indexOf['saturn']!] = 0;
     expect(pick(f, 100, 100)).toBeNull();
+  });
+
+  /** One ship at (x, y) and `depth`, with its marker shown. */
+  function withShip(f: MapFrame, x: number, y: number, depth: number) {
+    const world = createSandboxWorld();
+    for (const id of ['ship-2', 'ship-3']) world.ships[id]!.status = 'destroyed';
+    syncFrameShips(f, world);
+    f.ships.screenX[0] = x;
+    f.ships.screenY[0] = y;
+    f.ships.depth[0] = depth;
+    f.ships.markerShown[0] = 1;
+  }
+
+  it("picks a ship in front of its parent's disc before the disc", () => {
+    const f = frame();
+    place(f, 'earth', 100, 100, { depth: 2e4, disc: 60 });
+    withShip(f, 110, 100, 1.5e4);
+    expect(pick(f, 112, 100)).toEqual({ kind: 'ship', id: 'ship-1' });
+    expect(pick(f, 140, 100)).toEqual({ kind: 'body', id: 'earth' });
+  });
+
+  it("doesn't pick a ship behind a nearer disc", () => {
+    const f = frame();
+    place(f, 'earth', 100, 100, { depth: 2e4, disc: 60 });
+    withShip(f, 110, 100, 2.5e4);
+    expect(pick(f, 110, 100)).toEqual({ kind: 'body', id: 'earth' });
   });
 });

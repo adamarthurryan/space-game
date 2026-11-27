@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../../gen/scenario';
 import { getBody } from '../../sim/body';
 import type { MapObjectRef } from '../../store/useView';
-import { declutter, labelPriority, type LabelCandidate } from './declutter';
+import { declutter, labelPriority, shipLabelPriority, type LabelCandidate } from './declutter';
 
 const viewport = { x: 0, y: 0, w: 800, h: 600 };
 const ref = (id: string): MapObjectRef => ({ kind: 'body', id });
@@ -80,5 +80,15 @@ describe('labelPriority', () => {
   it('breaks ties by radius', () => {
     expect(p('jupiter')).toBeGreaterThan(p('earth'));
     expect(p('ganymede')).toBeGreaterThan(p('moon'));
+  });
+
+  it('ranks ships below dwarf planets and above moons, earlier ships first', () => {
+    const ship = (id: string, seq: number, view: View = none) =>
+      shipLabelPriority(seq, { kind: 'ship', id }, view);
+    expect(p('pluto', { ...none, focus: ref('sun') })).toBeGreaterThan(ship('ship-1', 1));
+    expect(ship('ship-9', 9)).toBeGreaterThan(p('ganymede'));
+    expect(ship('ship-1', 1)).toBeGreaterThan(ship('ship-2', 2));
+    const selected = { ...none, selected: { kind: 'ship', id: 'ship-2' } } as View;
+    expect(ship('ship-2', 2, selected)).toBeGreaterThan(p('sun'));
   });
 });

@@ -1,4 +1,7 @@
 import { getBody, majorChildren, type BodyId, type BodySystem } from '../../sim/body';
+import { shipStateAt } from '../../sim/ship';
+import type { World } from '../../sim/world';
+import type { MapObjectRef } from '../../store/useView';
 
 /** The farthest the camera goes from its focus, km (S2-10). */
 export const MAX_DISTANCE = 5e10;
@@ -30,4 +33,43 @@ export function framingDistance(sys: BodySystem, id: BodyId): number {
 /** The closest the camera goes to a body's centre: 1.05 × its radius (S2-10). */
 export function minDistance(sys: BodySystem, id: BodyId): number {
   return 1.05 * getBody(sys, id).radius;
+}
+
+/** The closest the camera goes to a ship, km (S3-15). */
+export const SHIP_MIN_DISTANCE = 0.05;
+/** A focused ship is framed at this multiple of its distance from its parent (S3-15). */
+export const SHIP_FRAMING_FACTOR = 2.5;
+
+/** The ship's framing: 2.5 × its distance from its parent, capped at the parent's framing. */
+export function shipFramingDistance(distanceFromParent: number, parentFraming: number): number {
+  return Math.max(
+    Math.min(SHIP_FRAMING_FACTOR * distanceFromParent, parentFraming),
+    SHIP_MIN_DISTANCE,
+  );
+}
+
+/** The parent body a ship is drawn around: its current parent, or the body it hit. */
+function shipBodyOf(world: World, id: string): BodyId {
+  const ship = world.ships[id];
+  return ship?.destroyedAt?.bodyId ?? ship?.orbit.parentId ?? world.system.rootId;
+}
+
+/** The framing distance of a body or a ship at the world's current time (S2-11, S3-15). */
+export function framingDistanceOf(world: World, ref: MapObjectRef): number {
+  if (ref.kind === 'body') return framingDistance(world.system, ref.id);
+  const ship = world.ships[ref.id];
+  const parentId = shipBodyOf(world, ref.id);
+  const parentFraming = framingDistance(world.system, parentId);
+  if (!ship || ship.status !== 'coasting') return parentFraming;
+  const r = shipStateAt(world.system, ship, world.clock.t).r;
+  return shipFramingDistance(Math.hypot(r.x, r.y, r.z), parentFraming);
+}
+
+/** The minimum camera distance for a body or a ship. */
+export function minDistanceOf(world: World, ref: MapObjectRef): number {
+  if (ref.kind === 'body') return minDistance(world.system, ref.id);
+  const ship = world.ships[ref.id];
+  return ship && ship.status === 'coasting'
+    ? SHIP_MIN_DISTANCE
+    : minDistance(world.system, shipBodyOf(world, ref.id));
 }
