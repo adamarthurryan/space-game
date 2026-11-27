@@ -22,7 +22,7 @@ This document covers how the game is built. What the game does is in [features.m
 │ gen/        Seeded system & scenario generation               │
 ├──────────────────────────────────────────────────────────────┤
 │ economy/    Stockpiles, facilities, production, construction, │
-│             crew & population, logistics routes               │
+│             crew, ecosystem & population, logistics routes    │
 │ knowledge/  Survey: detection, orbit determination, assays    │
 ├──────────────────────────────────────────────────────────────┤
 │ planning/   Maneuver planning tools (impulsive & low-thrust)  │
@@ -31,12 +31,14 @@ This document covers how the game is built. What the game does is in [features.m
 │ orbital/    Pure math: Kepler, SOI, Lambert, integrators      │
 │ math/       Vec3 (float64), units, root finding, PRNG         │
 └──────────────────────────────────────────────────────────────┘
-  content/    Typed data tables: resources, modules, engines,
+  content/    Structured text data files: resources, modules, engines,
               shielding, structures, recipes, unlock conditions
 ```
 
 - **Dependency rule:** each layer imports only from layers below it. Everything except `ui/`, `render/` and `store/` must not import React or Three.js. ESLint import rules enforce this.
-- **Content as data:** resources, modules, engines, shielding, structures, recipes and unlock conditions are typed tables in `content/`. Any layer may import them. Balancing means editing data, not code.
+- **Content as data:** all part types (backbones, modules, engines, shielding) and other content (resources, structures, recipes, unlock conditions) are defined in **structured text files** in `content/`, so they can be edited without touching code.
+  - Proposal: YAML files, each validated against a TypeScript schema (for example, with zod). Validation happens at build time, and in dev with hot reload, so a malformed part file fails fast with a clear error.
+  - `src/content/` holds only the schemas and the loader, which produces typed, read-only tables that any layer may import.
 
 Source layout:
 
@@ -53,7 +55,7 @@ src/
   economy/    stockpile.ts, facility.ts, rates.ts, construction.ts, crew.ts, routes.ts
   game/       progression.ts, unlocks.ts, scenario.ts, rules.ts
   gen/        realSystem.ts, fictionalSystem.ts, composition.ts, scenario.ts
-  content/    resources.ts, modules.ts, engines.ts, shielding.ts, structures.ts, recipes.ts
+  content/    schemas.ts, loader.ts        (data files live in /content/*.yaml)
   store/      useWorld.ts, useView.ts, simWorker.ts
   render/     Scene.tsx, BodyMesh.tsx, MinorBodies.tsx, OrbitLine.tsx, TrajectoryLine.tsx,
               NodeGizmo.tsx, overlays/, camera/
@@ -79,9 +81,10 @@ src/
 
 ## Ships, stations and stacks
 
-- A ship or station is a set of **module instances** that reference `content/modules.ts`, plus stockpiles, crew and (for ships) a trajectory plan.
+- A ship or station is **one backbone plus a set of module instances**, each referencing a content definition, plus stockpiles, crew and (for ships) a trajectory plan.
+- **Design validation:** total module mass and volume must fit within the backbone's limits. Later, capability flags (landing-rated backbone, landing gear, landing-incompatible modules, aerodynamic envelope) decide whether a design can land or fly in an atmosphere.
 - **Derived stats** are computed from the modules and the current stockpiles, and cached until either changes:
-  - mass, thrust and Isp per engine, Δv;
+  - mass and volume used vs. backbone limits, thrust and Isp per engine, Δv;
   - power and heat balance;
   - shielding factor.
 - **Stacks:** docked objects form a stack that propagates as one body with summed mass. Towing is just a stack flown by a tug's engines. Stations are stacks with no engines, held on rails.
@@ -190,7 +193,7 @@ The economy is **event-driven**, with no per-tick stepping. Between events, all 
 2. computes analytically the next time any stockpile reaches zero or its capacity;
 3. schedules that time as an event.
 
-Stockpile values between events are interpolated. Construction, population growth and docked transfers are modelled as rates with completion events.
+Stockpile values between events are interpolated. Construction and docked transfers are modelled as rates with completion events. Ecosystem health and population will plug into the same solver as rate-driven quantities with threshold events; their model is still open.
 
 ## Clock and event queue
 
@@ -198,7 +201,7 @@ Stockpile values between events are interpolated. Construction, population growt
 - Event sources:
   - plans: nodes, the start and end of arcs;
   - trajectories: SOI changes, closest approaches, docking, impact;
-  - the economy: stockpile limits, construction completion, population changes;
+  - the economy: stockpile limits, construction completion, ecosystem and population thresholds;
   - knowledge: survey results;
   - the environment: storm warning and onset;
   - alarms, and scenario events.
@@ -259,3 +262,4 @@ interface Alarm {
 
 - **VR:** R3F supports WebXR via `@react-three/xr`. Scene and camera logic must not depend on DOM overlays, and map interactions go through an input abstraction that a controller ray could also drive.
 - **Ship 3D models:** the module list is the full ship definition, so visual models can be added later without changing the sim.
+- **Landing and atmospheric flight** (later milestones): an abstract action, not a flight simulation. A planning-tool-like function checks the ship's capability flags, then computes the resource and Δv cost from its mass and the body's gravity (and atmosphere). The result is executed as an event that moves the ship between orbit and a surface location. A surface location is a stockpile location attached to the body, so the economy needs no special case.

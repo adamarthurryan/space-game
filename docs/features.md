@@ -4,35 +4,40 @@ This document covers what the game does: its systems and rules. The vision behin
 
 ## Scope
 
-- **Orbital gameplay.** No atmospheric flight. Ships never land. Large moons and planets may be exploited through a separate, abstract "landing" mechanism **[Open]**.
+- **Orbital gameplay** in the main milestones: ships don't land, and there is no atmospheric flight.
+- **Later milestones** add an abstract landing mechanism, and atmospheric flight (see [Landing and atmospheric flight](#landing-and-atmospheric-flight)).
 - **Real time with pause**, with time warp up to ×10⁷. There are no turns.
 - The player manages a **fleet**, but controls **one ship at a time** (the active ship). Plans are per ship.
 - **Physics:** bodies are on rails, coasting ships follow patched conics, and thrusting ships follow integrated thrust arcs. Propulsion is realistic, with no Epstein-style drives (see [worldbuilding.md](worldbuilding.md)).
 
 ## Ships and ship design
 
-- **Free-form modular design.** A ship design is a selection of modules and their settings. There are no hull classes, and no 3D arrangement or connection of the modules. Designs can be saved and cloned, and shipyards build from them.
+- **Free-form modular design.** A ship design is a **structural backbone** plus a selection of modules and their settings. There are no hull classes, and no 3D arrangement or connection of the modules. Designs can be saved and cloned, and shipyards build from them.
+- **Backbone:** every design has exactly one. It sets the maximum total **mass** and **volume** of the modules it carries. (Later, it also decides whether the ship can land.)
 - **Module categories:**
   - engines, propellant tanks, cargo holds, crew compartments;
   - power (solar arrays, fission reactor, fusion core), radiators, shielding;
   - tools (survey instruments, mining rigs, tug clamps).
-- **[Open]** Structural backbone classes: a backbone module that limits the total mass or module count a design can carry.
+- **Part definitions** (backbones, modules, engines) live in structured text files, so new parts can be added and balanced without code changes.
 - **Derived stats** shown for every design and ship:
-  - dry and wet mass, thrust and Isp per engine, Δv for the current load, acceleration;
+  - dry and wet mass, mass and volume used vs. backbone limits;
+  - thrust and Isp per engine, Δv for the current load, acceleration;
   - power balance, heat vs. radiator capacity;
   - shielding factor.
 - A ship can be refitted while docked at a shipyard.
 
 ## Propulsion
 
-**[Open]** The propulsion list needs an overhaul. The tiers below are a placeholder until that is done. Fusion is a realistic low-thrust drive (very high Isp, milli-g acceleration), not a torch ship.
+The engine types are listed below. Values are placeholders for balancing. Each type is defined as a part in a content file, so variants (for example, different chemical propellant pairs) are data, not new code. **[Open]** Which resources gate each type, and whether solar-electric and fusion drives are included.
 
-| Tier | Engine | Isp (s) | Thrust | Burn model | Power/heat |
-|------|--------|---------|--------|------------|------------|
-| 1 | Chemical | 300–460 | High (kN–MN) | Node, or a short finite burn | None |
-| 2 | Ion / Hall (electric) | 1 500–5 000 | Very low (N) | Thrust arc (days to months) | Large power draw; solar-electric thrust ∝ 1/r² |
-| 3 | Fission (nuclear-thermal) | 800–1 000 | Medium–high (kN–100 kN) | Finite burn (minutes to hours) | Reactor waste heat |
-| 4 | Fusion | 10⁴–10⁵ | Low (milli-g) | Thrust arc | Very high heat; reactor needs superconductors |
+| Engine | Isp (s) | Thrust | Burn model | Power/heat | Notes |
+|--------|---------|--------|------------|------------|-------|
+| Chemical (e.g. LOX/LH2) | 300–460 | High (kN–MN) | Node, or a short finite burn | None | Cheap and simple. Cryogenic propellants need storage. |
+| Solid-core nuclear thermal | 850–1 000 | Medium–high (10–100s kN) | Finite burn (minutes to hours) | Reactor waste heat, shielding | Hydrogen propellant. Needs fissiles. |
+| Gas-core nuclear thermal | 1 500–5 000 | Medium–high | Finite burn | Very high heat, large radiators | Closed-cycle ("light bulb") at the low end of the Isp range, open-cycle at the high end. |
+| Nuclear electric (ion / Hall / MPD) | 2 000–10 000 | Very low (N) | Thrust arc (days to months) | A reactor at constant power, plus large radiators | Thrust doesn't depend on distance from the star. |
+| *Candidate:* solar electric | 1 500–5 000 | Very low (N) | Thrust arc | Solar arrays; thrust ∝ 1/r² | |
+| *Candidate:* fusion (realistic) | 10⁴–10⁵ | Low (milli-g) | Thrust arc | Very high heat | Low thrust only, never a torch ship (decision 8). |
 
 ## Maneuvering
 
@@ -99,13 +104,21 @@ The tools are MechJeb-style helpers. **The game never suggests them**: they run 
 - **Facilities** (mining rigs, harvesters, refineries, factories, shipyards, life support) turn inputs into outputs. They need power and crew, and follow recipes.
 - **Extraction:**
   - minor bodies (asteroids, comets, small moonlets) are mined by a ship or rig docked to them;
-  - large moons and planets need the separate landing mechanism **[Open]**.
+  - large moons and planets are exploited through the landing mechanism, in later milestones.
 - **Crew and life support:** crew consume O₂, water and food, and accumulate dose. Habitats set the population capacity.
-- **Population:**
-  - Population stays constant ("stasis") unless the player plans growth.
-  - Planned growth happens exactly as planned, but takes time.
-  - Growth needs habitat capacity and life support.
+- **Ecosystem health and population [Open]:** the generation ship's closed-loop ecosystem, and later each habitat's, has a health state. Population dynamics depend on it, and ecosystem failure on the generation ship is a failure state. The model is still to be designed.
 - **Construction:** a project at a shipyard or construction site consumes delivered materials at a build rate, then completes as a new ship, station or module.
+
+## Landing and atmospheric flight (later milestones)
+
+- Landing is an **abstract action**, not a piloted descent. The player picks a landing site, and the game checks the ship's capability, then shows the cost.
+- **Landing capability requires:**
+  - a backbone rated for landing;
+  - landing gear;
+  - no landing-incompatible modules.
+- **Atmospheric flight** also requires an aerodynamic envelope.
+- **Resource and Δv cost** is calculated from the ship's properties (mass, engines) and the body's properties (gravity, atmosphere).
+- A landed ship can extract resources from the body. Its surface stockpile works like any other location.
 
 ## Logistics routes
 

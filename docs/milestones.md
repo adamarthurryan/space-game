@@ -1,6 +1,6 @@
 # Milestones
 
-This is a proposal, and its timing is under review (see [decisions.md](decisions.md)). Each milestone builds on the one before and is playable on its own. Features are described in [features.md](features.md).
+Open questions about milestones are tracked in [decisions.md](decisions.md). Each milestone builds on the one before and is playable on its own. Features are described in [features.md](features.md).
 
 ## 1. Orbital sandbox
 
@@ -22,7 +22,7 @@ The `Segment` union (conic | thrust) is defined here, so that adding thrust arcs
 
 ## 3. Exploitation (gameplay phase 2)
 
-- Thrust arcs and finite burns: ion drives.
+- Thrust arcs and finite burns: electric drives (nuclear electric, or solar electric if it is included).
 - Stockpiles, facilities, and the event-driven economy solver.
 - Mining by docking with minor bodies, and cargo transfer.
 - Depots, logistics routes (route programs), life support.
@@ -31,12 +31,12 @@ The `Segment` union (conic | thrust) is defined here, so that adding thrust arcs
 ## 4. Expansion and advanced manufacturing (gameplay phases 3–4)
 
 - Construction, stations and habitats, towing.
-- Fission and fusion tiers, shielding strategies.
-- Resource-gated unlocks, population growth, scenario goals and failure states.
+- Nuclear engines (solid-core, gas-core, nuclear electric) and any candidate drives, shielding strategies.
+- Resource-gated unlocks, ecosystem health and population, scenario goals and failure states.
 
 ## Other Features
 
 - Equipment failure, irrational crew actions, ecosystem issues, and other random issues.
-- Landing mechanism for large moons and planets.
+- Landing mechanism for large moons and planets, and atmospheric flight (abstract, gated by ship capability).
 - 3D models for ship designs.
 - VR (WebXR).

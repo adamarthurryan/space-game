@@ -12,7 +12,7 @@ See [features.md](features.md) for the game systems, [architecture.md](architect
 
 ## Principles
 
-- **The map is home.** Every activity is reached from the map, and the map stays visible behind it (as a side panel or a partial overlay) wherever that is practical. Logistics is spatial, so the player should always be able to see where things are.
+- **The map is home.** Every activity is reached from the map, and the player returns to it in one keypress. Logistics is spatial, so the map is never more than one step away.
 - **Show consequences, not advice.** Every plan shows its Δv, propellant, transit time, crew dose and effect on stockpiles. The game never says what to do.
 - **Scale.** The late game has hundreds of bodies, ships and stations, so every list is searchable and filterable, and the map can be filtered by layer.
 
@@ -54,7 +54,7 @@ Both side panels can be collapsed, so the map can fill the screen.
 
 ## Screens
 
-The map is the main view. Other screens open as **large panels over part of the map**, so it stays live and clickable behind them. Each has a keyboard shortcut.
+The map is the main view. The other screens are **full-screen views where that suits them** (Economy, Construction and Ship designer all benefit from the space). Each has a keyboard shortcut, and the same key or Esc returns to the map. Clicking a location or object in a screen jumps to it on the map.
 
 | Screen | Purpose |
 |--------|---------|
@@ -108,7 +108,7 @@ The player manages a fleet of ships but **controls one ship at a time**, the **a
 **Fleet list** (the Fleets tab):
 - Ships are grouped into named fleets. The player creates, renames and deletes fleets, and moves ships between them by dragging. Ships with no fleet appear under "Unassigned".
 - Each ship row shows:
-  - its name, colour and engine tier;
+  - its name, colour and engine type;
   - its current SOI, and a countdown to its next event ("Mars SOI in 3 d 4 h");
   - remaining Δv, cargo fill, and crew dose;
   - its route, if it has one;
@@ -193,7 +193,7 @@ Routes are repeatable programs created from a manual plan (see [features.md](fea
 
 ## Construction screen
 
-- **Blueprints**, grouped by category: ship modules, engine tiers, shielding, station modules, habitats (work pods → Bernal sphere → O'Neill cylinder segments).
+- **Blueprints**, grouped by category: backbones, ship modules, engines, shielding, station modules, habitats (work pods → Bernal sphere → O'Neill cylinder segments).
   - Locked blueprints show their **unlock condition as a progress bar** (for example, "Fission drive: refined fissiles 1.2 / 2.0 t"). The resource gating is then visible, and is what the player plans toward.
   - Unlocked blueprints show their material bill, build time and required facility.
 - **Build queues** per shipyard or construction site: projects, the materials delivered so far against what is needed, the current build rate, and the estimated completion time. A project that is waiting for deliveries shows what is missing, and which routes are supplying it.
@@ -202,7 +202,8 @@ Routes are repeatable programs created from a manual plan (see [features.md](fea
 
 The designer is free-form, with no hull classes and no 3D layout (see [features.md](features.md#ships-and-ship-design)).
 
-- Build the design as a list of modules (engines, tanks, cargo, crew, power, radiators, shielding and tools), each with a count and settings. Start from scratch, or clone a saved design.
+- Choose a **backbone**, then add modules (engines, tanks, cargo, crew, power, radiators, shielding and tools), each with a count and settings. Start from scratch, or clone a saved design.
+- **Mass and volume bars** show what is used against the backbone's limits. A module that doesn't fit is flagged before it is added.
 - **Live stats:**
   - dry and wet mass;
   - Δv when empty and when fully loaded;
@@ -211,6 +212,7 @@ The designer is free-form, with no hull classes and no 3D layout (see [features.
   - shielding factor and the expected dose per month;
   - the material bill.
 - Problems are flagged inline: "radiators insufficient for reactor", "no storm shelter for crew", and so on.
+- Later milestones: **capability badges** ("can land", "atmospheric flight"). Each one lists what is missing (for example, "needs landing gear" or "solar array not landing-compatible").
 - Designs are saved to a design library, which shipyards then build from.
 
 ## Survey screen
@@ -255,7 +257,7 @@ The content depends on the selection:
   - Lagrange points;
   - actions: "set as target", "plan transfer here".
 - **Ship:**
-  - modules, mass, propellant, Δv remaining, engines (thrust, Isp, tier);
+  - modules, mass, propellant, Δv remaining, backbone (mass and volume used), engines (type, thrust, Isp);
   - power and heat balance, cargo, crew and dose;
   - current orbit, fleet, route, target;
   - node and arc list, alarms;
