@@ -5,11 +5,11 @@
  */
 
 import type { Body } from '../../sim/body';
-import { sameRef, type MapObjectRef } from '../../store/useView';
+import { sameRef, type FocusRef, type MapObjectRef } from '../../store/useView';
 import type { PlacedLabel, Rect } from '../mapFrame';
 
 export interface LabelCandidate {
-  ref: MapObjectRef;
+  ref: FocusRef;
   /** Left edge and vertical centre of the label: it goes right of the marker or disc. */
   anchorX: number;
   anchorY: number;

@@ -9,7 +9,13 @@ export function Inspector() {
   return (
     <aside className={styles['inspector']} aria-label="Inspector" id="inspector">
       <h2 className={styles['heading']}>Inspector</h2>
-      {selected?.kind === 'ship' ? <ShipInspector id={selected.id} /> : <BodyInspector />}
+      {selected?.kind === 'ship' ? (
+        <ShipInspector id={selected.id} />
+      ) : selected?.kind === 'node' ? (
+        <ShipInspector id={selected.shipId} />
+      ) : (
+        <BodyInspector />
+      )}
     </aside>
   );
 }

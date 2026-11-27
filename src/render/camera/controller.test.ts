@@ -18,7 +18,7 @@ import {
   zoomBy,
   type CameraController,
 } from './controller';
-import type { MapObjectRef } from '../../store/useView';
+import type { FocusRef } from '../../store/useView';
 import { shipStateAt } from '../../sim/ship';
 import { orbitPoleOf } from './CameraStage';
 import {
@@ -30,7 +30,7 @@ import {
 } from './framing';
 
 const sys = createSandboxWorld().system;
-const body = (id: string): MapObjectRef => ({ kind: 'body', id });
+const body = (id: string): FocusRef => ({ kind: 'body', id });
 
 function earthController(): CameraController {
   return createController(body('earth'), framingDistance(sys, 'earth'), minDistance(sys, 'earth'));
@@ -179,7 +179,7 @@ describe('snap', () => {
 
 describe('refocus', () => {
   const warp = 1e6;
-  const focusWorld = (t: () => number) => (ref: MapObjectRef, out: Vec3) => {
+  const focusWorld = (t: () => number) => (ref: FocusRef, out: Vec3) => {
     const r = bodyWorldState(sys, ref.id, t()).r;
     out.x = r.x;
     out.y = r.y;
@@ -224,9 +224,9 @@ describe('refocus', () => {
 
 describe('ships', () => {
   const world = createSandboxWorld();
-  const kestrel: MapObjectRef = { kind: 'ship', id: 'ship-1' };
+  const kestrel: FocusRef = { kind: 'ship', id: 'ship-1' };
   /** Earth or Kestrel, world positions at t. */
-  const at = (t: number) => (ref: MapObjectRef, out: Vec3) => {
+  const at = (t: number) => (ref: FocusRef, out: Vec3) => {
     const earth = bodyWorldState(world.system, 'earth', t).r;
     const r =
       ref.kind === 'ship'

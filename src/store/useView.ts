@@ -1,9 +1,28 @@
 import { create } from 'zustand';
 import type { BodyId } from '../sim/body';
+import type { NodeId } from '../sim/maneuver';
 import type { ShipId } from '../sim/ship';
 
-/** Something on the map that can be selected, hovered or focused (S3-15). */
-export type MapObjectRef = { kind: 'body'; id: BodyId } | { kind: 'ship'; id: ShipId };
+/** Something the camera can focus (S3-15): a body or a ship. */
+export type FocusRef = { kind: 'body'; id: BodyId } | { kind: 'ship'; id: ShipId };
+/** Something on the map that can be selected or hovered: also a ship's node (S4-10). */
+export type MapObjectRef = FocusRef | { kind: 'node'; shipId: ShipId; id: NodeId };
+
+/** The object a ref focuses: a node focuses its ship (S4-10). */
+export const focusRefOf = (ref: MapObjectRef): FocusRef =>
+  ref.kind === 'node' ? { kind: 'ship', id: ref.shipId } : ref;
+
+/** The ship a ref makes active, if any (S4-9). */
+const shipOf = (ref: MapObjectRef | null): ShipId | null =>
+  ref?.kind === 'ship' ? ref.id : ref?.kind === 'node' ? ref.shipId : null;
+
+/** The active ship, if it still exists and isn't destroyed (S4-9). */
+export function resolveActiveShip(
+  world: { ships: Record<ShipId, { status: string }> },
+  id: ShipId | null,
+): ShipId | null {
+  return id !== null && world.ships[id]?.status === 'coasting' ? id : null;
+}
 
 /** Whether two refs name the same object. */
 export const sameRef = (a: MapObjectRef | null, b: MapObjectRef | null): boolean =>
@@ -23,7 +42,9 @@ interface ViewState {
   selected: MapObjectRef | null;
   hovered: MapObjectRef | null;
   /** Drives the camera (S2-13). */
-  focus: MapObjectRef;
+  focus: FocusRef;
+  /** The ship whose plan can be edited: the last selected ship (S4-9). */
+  activeShipId: ShipId | null;
   /** Bumped by every focusOn, so refocusing the same body re-frames it. */
   focusSeq: number;
   /** The latest snap request; the camera rig reacts to a new seq. */
@@ -37,8 +58,9 @@ interface ViewState {
   setLeftTab(tab: LeftTab): void;
   select(ref: MapObjectRef | null): void;
   setHovered(ref: MapObjectRef | null): void;
-  /** Focuses and selects. */
+  /** Focuses and selects; a node focuses its ship and selects the node. */
   focusOn(ref: MapObjectRef): void;
+  setActiveShip(id: ShipId | null): void;
   snapTo(plane: SnapPlane): void;
   toggleExpanded(id: BodyId): void;
   setSpawnFormOpen(open: boolean): void;
@@ -58,6 +80,7 @@ export const useView = create<ViewState>()((set) => ({
   selected: null,
   hovered: null,
   focus: { kind: 'body', id: 'earth' },
+  activeShipId: null,
   focusSeq: 0,
   snapRequest: null,
   expanded: { sun: true },
@@ -65,9 +88,16 @@ export const useView = create<ViewState>()((set) => ({
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftTab: (tab) => set({ leftTab: tab }),
-  select: (ref) => set({ selected: ref }),
+  select: (ref) => set((s) => ({ selected: ref, activeShipId: shipOf(ref) ?? s.activeShipId })),
+  setActiveShip: (id) => set({ activeShipId: id }),
   setHovered: (ref) => set({ hovered: ref }),
-  focusOn: (ref) => set((s) => ({ focus: ref, selected: ref, focusSeq: s.focusSeq + 1 })),
+  focusOn: (ref) =>
+    set((s) => ({
+      focus: focusRefOf(ref),
+      selected: ref,
+      activeShipId: shipOf(ref) ?? s.activeShipId,
+      focusSeq: s.focusSeq + 1,
+    })),
   snapTo: (plane) => set((s) => ({ snapRequest: { plane, seq: (s.snapRequest?.seq ?? 0) + 1 } })),
   setSpawnFormOpen: (open) => set({ spawnFormOpen: open }),
   toggleExpanded: (id) => set((s) => ({ expanded: { ...s.expanded, [id]: !s.expanded[id] } })),

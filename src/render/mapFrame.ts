@@ -9,7 +9,7 @@ import { vec3, type Vec3 } from '../math/vec3';
 import { bodyOrder, bodyWorldPositionsInto, type BodyId, type BodySystem } from '../sim/body';
 import { shipStateAt, type ShipId } from '../sim/ship';
 import type { World } from '../sim/world';
-import type { MapObjectRef } from '../store/useView';
+import type { FocusRef } from '../store/useView';
 
 /** The camera of this frame, relative to the origin: position and orthonormal basis. */
 export interface FrameCamera {
@@ -36,7 +36,7 @@ export interface Rect {
 
 /** A label placed by the declutter pass (step 6), kept for picking. */
 export interface PlacedLabel {
-  ref: MapObjectRef;
+  ref: FocusRef;
   rect: Rect;
 }
 
@@ -188,12 +188,7 @@ export function updateFrameShips(frame: MapFrame, world: World): void {
  * The world position of a body or ship at frame.t, into `out`. A ship that isn't drawn (it was
  * destroyed) gives the body it impacted, or its parent.
  */
-export function mapObjectWorldInto(
-  frame: MapFrame,
-  world: World,
-  ref: MapObjectRef,
-  out: Vec3,
-): Vec3 {
+export function mapObjectWorldInto(frame: MapFrame, world: World, ref: FocusRef, out: Vec3): Vec3 {
   if (ref.kind === 'ship') {
     const k = frame.ships.indexOf[ref.id];
     if (k !== undefined) {
@@ -210,7 +205,7 @@ export function mapObjectWorldInto(
 }
 
 /** The body trajectories are drawn relative to: the focus, or a focused ship's parent (S3-16). */
-export function frameBodyOf(world: World, focus: MapObjectRef): BodyId {
+export function frameBodyOf(world: World, focus: FocusRef): BodyId {
   if (focus.kind === 'body') return focus.id;
   const ship = world.ships[focus.id];
   return ship?.destroyedAt?.bodyId ?? ship?.orbit.parentId ?? world.system.rootId;

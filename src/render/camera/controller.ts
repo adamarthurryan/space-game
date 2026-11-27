@@ -9,7 +9,7 @@
  */
 
 import { cross, dot, normalize, vec3, type Vec3 } from '../../math/vec3';
-import type { MapObjectRef } from '../../store/useView';
+import type { FocusRef } from '../../store/useView';
 import { MAX_DISTANCE } from './framing';
 
 /** One wheel notch zooms by ×2 (S2-10). */
@@ -37,7 +37,7 @@ export function wheelNotches(e: { deltaY: number; deltaMode: number }): number {
 
 export interface CameraController {
   /** The body or ship the camera orbits (S3-15). */
-  focus: MapObjectRef;
+  focus: FocusRef;
   /** Reference pole, unit, ecliptic axes (S2-12). */
   pole: Vec3;
   /** About the pole, from the pole basis's u axis. */
@@ -48,7 +48,7 @@ export interface CameraController {
   logDistance: number;
   target: { yaw: number; pitch: number; logDistance: number };
   refocus: {
-    from: MapObjectRef;
+    from: FocusRef;
     elapsed: number;
     duration: number;
     fromLogDistance: number;
@@ -78,7 +78,7 @@ export function poleBasis(pole: Vec3): { u: Vec3; v: Vec3; w: Vec3 } {
 }
 
 export function createController(
-  focus: MapObjectRef,
+  focus: FocusRef,
   framing: number,
   minDist: number,
 ): CameraController {
@@ -121,7 +121,7 @@ export function orbitBy(c: CameraController, dxPx: number, dyPx: number): void {
 /** Starts a refocus on `to` (S2-11), moving to its framing distance. */
 export function beginRefocus(
   c: CameraController,
-  to: MapObjectRef,
+  to: FocusRef,
   framing: number,
   minDist: number,
 ): void {
@@ -199,7 +199,7 @@ export function stepController(c: CameraController, dtWall: number): void {
  */
 export function controllerOriginInto(
   c: CameraController,
-  focusWorld: (ref: MapObjectRef, out: Vec3) => Vec3,
+  focusWorld: (ref: FocusRef, out: Vec3) => Vec3,
   out: Vec3,
 ): Vec3 {
   focusWorld(c.focus, out);

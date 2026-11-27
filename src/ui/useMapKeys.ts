@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useView } from '../store/useView';
+import { focusRefOf, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 
 /**
@@ -10,10 +10,10 @@ export function canSnapToSelectedOrbit(): boolean {
   const selected = useView.getState().selected;
   if (!selected) return false;
   const world = useWorld.getState().world;
-  if (selected.kind === 'ship') return world.ships[selected.id]?.status === 'coasting';
-  return !!world.system.bodies[selected.id]?.orbit;
+  const ref = focusRefOf(selected);
+  if (ref.kind === 'ship') return world.ships[ref.id]?.status === 'coasting';
+  return !!world.system.bodies[ref.id]?.orbit;
 }
-
 /** Text fields keep every key; buttons, tabs and tree rows keep Space and Enter. */
 function ignoredFor(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false;
