@@ -17,6 +17,8 @@ interface DebugSources {
   controller?: CameraController;
   trajectories?: TrajectoryLayer;
   markers?: TrajectoryMarkerRegistry;
+  /** The node gizmo on screen (S4-20). */
+  gizmo?: () => unknown;
 }
 
 const sources: DebugSources = {};
@@ -128,6 +130,10 @@ function createProbes() {
           t: p.times[k]!,
         })),
       }));
+    },
+    /** The gizmo: its node and each handle's screen position and axis, or null (S4-20). */
+    gizmo() {
+      return sources.gizmo?.() ?? null;
     },
     /** The active ship's ID, as the view has it (S4-20). */
     activeShip() {
