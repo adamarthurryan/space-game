@@ -4,6 +4,7 @@ import { useWorld } from '../store/useWorld';
 import { Bodies } from './Bodies';
 import { CameraRig } from './camera/CameraRig';
 import { FrameLoop } from './FrameLoop';
+import { OrbitLines } from './OrbitLines';
 import { createMapFrame, MapFrameContext } from './mapFrame';
 
 /** Fixed clip planes, km, with a logarithmic depth buffer (S2-5). */
@@ -26,6 +27,7 @@ export function Scene() {
         <FrameLoop />
         <CameraRig />
         <Bodies />
+        <OrbitLines />
       </MapFrameContext.Provider>
     </Canvas>
   );
