@@ -4,13 +4,15 @@ import { norm, normSq, scale, sub, vec3, type Vec3 } from '../math/vec3';
 import {
   angularMomentum,
   elementsFromState,
+  type MeanElements,
   period,
   specificEnergy,
   stateFromElements,
   type StateVector,
 } from './elements';
 import { meanFromTrue, solveKeplerHyperbolic, trueFromHyperbolic, trueFromMean } from './kepler';
-import { propagate, propagateInto } from './propagate';
+import { meanElementsAt, propagate, propagateInto, stateFromMeanElements } from './propagate';
+import { planeToEcliptic } from './frames';
 
 const MU_EARTH = 398_600.4418;
 const MU_SUN = 1.327_124_400_18e11;
@@ -212,5 +214,97 @@ describe('propagateInto', () => {
     expect(propagateInto(out, MU_EARTH, s0, 1234)).toEqual(expected);
     const aliased = { r: vec3(7000, -300, 1200), v: vec3(0.5, 7.2, 1.1) };
     expect(propagateInto(aliased, MU_EARTH, aliased, 1234)).toEqual(expected);
+  });
+});
+
+describe('mean elements', () => {
+  const YEAR = 31_557_600;
+  // A Moon-like orbit: a, e, i, Ω, ω, M₀ and n.
+  const base: MeanElements = {
+    a: 384_400,
+    e: 0.0554,
+    i: 5.16 * (Math.PI / 180),
+    lan: 2.18,
+    argp: 5.55,
+    meanAnomaly: 2.36,
+    meanMotion: 2.661_7e-6,
+  };
+  // Nodal regression in 18.6 years, apsidal advance in 8.85 years, and a made-up i̇.
+  const withRates: MeanElements = {
+    ...base,
+    rates: { lan: (-2 * Math.PI) / (18.6 * YEAR), argp: (2 * Math.PI) / (8.85 * YEAR), i: 1e-12 },
+  };
+  const plane = { poleRa: 0.7, poleDec: 1.1 };
+
+  it('without rates, is periodic with 2π/n', () => {
+    const T = (2 * Math.PI) / base.meanMotion;
+    for (const t of [0, 1e5, -3e6]) {
+      const d = stateDistance(
+        stateFromMeanElements(base, t + 5 * T),
+        stateFromMeanElements(base, t),
+      );
+      expect(d.dr).toBeLessThan(1e-6);
+      expect(d.dv).toBeLessThan(1e-12);
+    }
+  });
+
+  it('at t = 0, agrees with stateFromElements for μ = n²a³', () => {
+    const mu = base.meanMotion ** 2 * base.a ** 3;
+    const expected = stateFromElements(mu, {
+      p: base.a * (1 - base.e ** 2),
+      e: base.e,
+      i: base.i,
+      lan: base.lan,
+      argp: base.argp,
+      nu: trueFromMean(base.meanAnomaly, base.e),
+    });
+    const d = stateDistance(stateFromMeanElements(base, 0), expected);
+    expect(d.dr).toBeLessThan(1e-9);
+    expect(d.dv).toBeLessThan(1e-15);
+  });
+
+  it('applies the rates linearly and wraps the angles', () => {
+    const m: MeanElements = {
+      ...base,
+      rates: { a: 1e-3, e: 1e-12, i: 1e-11, lan: -1e-8, argp: 2e-8 },
+    };
+    const t = 50 * YEAR;
+    const at = meanElementsAt(m, t);
+    expect(at.a).toBeCloseTo(base.a + 1e-3 * t, 6);
+    expect(at.e).toBeCloseTo(base.e + 1e-12 * t, 15);
+    expect(at.i).toBeCloseTo(base.i + 1e-11 * t, 15);
+    for (const [key, rate, start] of [
+      ['lan', -1e-8, base.lan],
+      ['argp', 2e-8, base.argp],
+      ['meanAnomaly', base.meanMotion, base.meanAnomaly],
+    ] as const) {
+      const angle = at[key];
+      expect(angle).toBeGreaterThanOrEqual(0);
+      expect(angle).toBeLessThan(2 * Math.PI);
+      expect(Math.cos(angle - (start + rate * t))).toBeCloseTo(1, 9);
+      expect(Math.sin(angle - (start + rate * t))).toBeCloseTo(0, 9);
+    }
+    expect(at.rates).toBe(m.rates);
+    expect(at.meanMotion).toBe(base.meanMotion);
+  });
+
+  it('the velocity matches the central difference of the position', () => {
+    for (const m of [base, withRates, { ...withRates, plane }]) {
+      for (const t of [0, 1.234e6, 3e9, -5e9]) {
+        const h = 1;
+        const ahead = stateFromMeanElements(m, t + h).r;
+        const behind = stateFromMeanElements(m, t - h).r;
+        const numeric = scale(sub(ahead, behind), 1 / (2 * h));
+        const v = stateFromMeanElements(m, t).v;
+        expect(norm(sub(v, numeric)) / norm(v)).toBeLessThan(1e-6);
+      }
+    }
+  });
+
+  it('applies the reference plane as a rotation', () => {
+    const local = stateFromMeanElements(base, 1e6);
+    const rotated = stateFromMeanElements({ ...base, plane }, 1e6);
+    expect(norm(sub(rotated.r, planeToEcliptic(plane, local.r)))).toBeLessThan(1e-9);
+    expect(norm(sub(rotated.v, planeToEcliptic(plane, local.v)))).toBeLessThan(1e-15);
   });
 });

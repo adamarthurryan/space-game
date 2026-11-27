@@ -1,13 +1,13 @@
 /**
- * Two-body propagation of any conic with universal variables (decision S1-12).
- *
- * `meanElementsAt` and `stateFromMeanElements` (orbits on rails) are added with the reference
- * planes, in step 3 of sprint 1.
+ * Propagation: two-body propagation of any conic with universal variables (decision S1-12),
+ * and the state of an orbit on rails from its mean elements (S1-5).
  */
 
-import { TWO_PI } from '../math/units';
-import type { StateVector } from './elements';
-import { solveUniversal } from './kepler';
+import { TWO_PI, wrapPi, wrapTwoPi } from '../math/units';
+import { addScaled, cross, type Vec3 } from '../math/vec3';
+import { stateFromElements, type MeanElements, type StateVector } from './elements';
+import { planeToEcliptic } from './frames';
+import { solveKeplerElliptic, solveUniversal, trueFromEccentric } from './kepler';
 
 /** Universal-variable propagation of any conic, for any sign of dt. */
 export function propagate(mu: number, s0: StateVector, dt: number): StateVector {
@@ -66,4 +66,61 @@ export function propagateInto(
   out.v.y = vy;
   out.v.z = vz;
   return out;
+}
+
+// ---- Orbits on rails ------------------------------------------------------------------------
+
+/**
+ * The elements of a mean-element orbit at t: the rates applied linearly, M = M₀ + n·t, and the
+ * angles Ω, ω and M wrapped to [0, 2π). The result describes the orbit at t, but keeps the
+ * input's rates, n and plane.
+ */
+export function meanElementsAt(m: MeanElements, t: number): MeanElements {
+  const rates = m.rates;
+  const out: MeanElements = {
+    a: m.a + (rates?.a ?? 0) * t,
+    e: m.e + (rates?.e ?? 0) * t,
+    i: m.i + (rates?.i ?? 0) * t,
+    lan: wrapTwoPi(m.lan + (rates?.lan ?? 0) * t),
+    argp: wrapTwoPi(m.argp + (rates?.argp ?? 0) * t),
+    meanAnomaly: wrapTwoPi(m.meanAnomaly + m.meanMotion * t),
+    meanMotion: m.meanMotion,
+  };
+  if (rates) out.rates = rates;
+  if (m.plane) out.plane = m.plane;
+  return out;
+}
+
+/**
+ * State at t relative to the parent, in world (ecliptic) axes, with the plane rotation applied.
+ *
+ * The Keplerian part of the velocity uses μ_eff = n²a³, so it matches the motion in M. The
+ * rotation of the orbit by the rates of Ω, i and ω is added to it: for the Moon, the apsidal
+ * and nodal motion is about 1% of the orbital speed. The velocity terms from the rates of a and
+ * e are left out; they are many orders of magnitude smaller.
+ */
+export function stateFromMeanElements(m: MeanElements, t: number): StateVector {
+  const el = meanElementsAt(m, t);
+  const { a, e, i, lan, argp } = el;
+  const muEff = m.meanMotion * m.meanMotion * a * a * a;
+  const nu = wrapPi(trueFromEccentric(wrapPi(solveKeplerElliptic(el.meanAnomaly, e)), e));
+  const s = stateFromElements(muEff, { p: a * (1 - e * e), e, i, lan, argp, nu });
+
+  const rates = m.rates;
+  if (rates && (rates.lan || rates.i || rates.argp)) {
+    // dr/dt from rotating the orbit: Ω̇ about the plane's pole, i̇ about the node line and
+    // ω̇ about the orbit normal.
+    const sinI = Math.sin(i);
+    const pole: Vec3 = { x: 0, y: 0, z: 1 };
+    const node: Vec3 = { x: Math.cos(lan), y: Math.sin(lan), z: 0 };
+    const normal: Vec3 = { x: sinI * Math.sin(lan), y: -sinI * Math.cos(lan), z: Math.cos(i) };
+    let v = s.v;
+    if (rates.lan) v = addScaled(v, cross(pole, s.r), rates.lan);
+    if (rates.i) v = addScaled(v, cross(node, s.r), rates.i);
+    if (rates.argp) v = addScaled(v, cross(normal, s.r), rates.argp);
+    s.v = v;
+  }
+
+  if (!m.plane) return s;
+  return { r: planeToEcliptic(m.plane, s.r), v: planeToEcliptic(m.plane, s.v) };
 }
