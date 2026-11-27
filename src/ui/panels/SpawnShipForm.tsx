@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { registry } from '../../content/registry';
 import {
   orbitFromInput,
+  isComputedPreset,
   presetInput,
   presetOrbit,
   SPAWN_PRESETS,
@@ -93,7 +94,7 @@ export function SpawnShipForm() {
   function applyPreset(preset: SpawnPreset) {
     setError(null);
     const world = useWorld.getState().world;
-    if (preset !== 'to-the-moon') {
+    if (!isComputedPreset(preset)) {
       setFields((f) => fieldsFromInput(f, presetInput(system, preset)));
       setOverride(null);
       return;
