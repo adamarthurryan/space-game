@@ -13,3 +13,7 @@ The principle view of the game is a map of a solar system, with the position, tr
 # Project Structure
 
 The concept and architecture of the game are documented in the `docs` folder.
+
+# Tech Stack
+
+The project will be built using TypeScript, Three.js, and React Three Fibre. It will be purely client-side and browser-based. 
