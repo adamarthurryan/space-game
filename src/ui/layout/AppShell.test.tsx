@@ -71,6 +71,14 @@ describe('AppShell', () => {
     expect(within(screen.getByRole('tabpanel')).getByText('No ships yet.')).toBeTruthy();
   });
 
+  it('shows the body tree in the System tab', () => {
+    render(<AppShell />);
+    const panel = screen.getByRole('tabpanel');
+    expect(within(panel).getByRole('tree', { name: 'System' })).toBeTruthy();
+    expect(within(panel).getByRole('treeitem', { name: 'Sun' })).toBeTruthy();
+    expect(within(panel).queryByText('No bodies yet.')).toBeNull();
+  });
+
   it('moves between tabs with the arrow keys', async () => {
     const user = userEvent.setup();
     render(<AppShell />);

@@ -1,9 +1,10 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { useView, type LeftTab } from '../../store/useView';
+import { SystemTree } from '../panels/SystemTree';
 import styles from './LeftSidebar.module.css';
 
 const TABS: { id: LeftTab; label: string; empty: string }[] = [
-  { id: 'system', label: 'System', empty: 'No bodies yet.' },
+  { id: 'system', label: 'System', empty: '' },
   { id: 'fleets', label: 'Fleets', empty: 'No ships yet.' },
   { id: 'stations', label: 'Stations', empty: 'No stations yet.' },
   { id: 'routes', label: 'Routes', empty: 'No routes yet.' },
@@ -56,7 +57,11 @@ export function LeftSidebar() {
         id="left-tabpanel"
         aria-labelledby={`left-tab-${active.id}`}
       >
-        <p className={styles['empty']}>{active.empty}</p>
+        {active.id === 'system' ? (
+          <SystemTree />
+        ) : (
+          <p className={styles['empty']}>{active.empty}</p>
+        )}
       </div>
       <details className={styles['filters']}>
         <summary>Filters</summary>

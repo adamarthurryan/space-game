@@ -34,6 +34,9 @@ interface ViewState {
   focusOn(ref: MapObjectRef): void;
   snapTo(plane: SnapPlane): void;
   toggleExpanded(id: BodyId): void;
+  setExpanded(id: BodyId, expanded: boolean): void;
+  /** Expands every listed body (no change, and no update, if all are expanded). */
+  expand(ids: readonly BodyId[]): void;
 }
 
 /**
@@ -58,4 +61,12 @@ export const useView = create<ViewState>()((set) => ({
   focusOn: (ref) => set((s) => ({ focus: ref, selected: ref, focusSeq: s.focusSeq + 1 })),
   snapTo: (plane) => set((s) => ({ snapRequest: { plane, seq: (s.snapRequest?.seq ?? 0) + 1 } })),
   toggleExpanded: (id) => set((s) => ({ expanded: { ...s.expanded, [id]: !s.expanded[id] } })),
+  setExpanded: (id, value) => set((s) => ({ expanded: { ...s.expanded, [id]: value } })),
+  expand: (ids) =>
+    set((s) => {
+      if (ids.every((id) => s.expanded[id])) return s;
+      const expanded = { ...s.expanded };
+      for (const id of ids) expanded[id] = true;
+      return { expanded };
+    }),
 }));

@@ -1,6 +1,6 @@
 /**
- * Display formatting. Sprint 2 step 1 has the date and warp; distances, speeds and the rest
- * come with the body inspector.
+ * Display formatting for the panels. Unit switching is sprint 10; for now distances switch from
+ * km to AU at 1e7 km (S2-18).
  */
 
 import type { CalendarDate } from '../math/time';
@@ -28,4 +28,59 @@ export function formatWarp(rate: number): string {
   if (exp <= 1) return `×${rate}`;
   const sup = [...String(exp)].map((c) => SUPERSCRIPT[Number(c)]).join('');
   return `×10${sup}`;
+}
+
+const AU_KM = 149_597_870.7;
+const DAY = 86_400;
+const YEAR = 365.25 * DAY;
+const THOUSANDS = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+/** `6,771 km` below 1e7 km (one decimal under 100 km), `1.524 AU` above. */
+export function formatDistance(km: number): string {
+  if (!Number.isFinite(km)) return '∞';
+  if (Math.abs(km) >= 1e7) return `${(km / AU_KM).toFixed(3)} AU`;
+  if (Math.abs(km) < 100) return `${km.toFixed(1)} km`;
+  return `${THOUSANDS.format(km)} km`;
+}
+
+/** `7.67 km/s`, or `340 m/s` below 1 km/s. */
+export function formatSpeed(kmps: number): string {
+  if (Math.abs(kmps) < 1) return `${THOUSANDS.format(kmps * 1000)} m/s`;
+  return `${kmps.toFixed(2)} km/s`;
+}
+
+/** `42.0 s`, `12 min 5 s`, `23 h 56 min`, `27 d 7 h`, `1.881 yr`. */
+export function formatDuration(s: number): string {
+  const a = Math.abs(s);
+  const sign = s < 0 ? MINUS : '';
+  if (a < 60) return `${sign}${a.toFixed(1)} s`;
+  if (a < 3600) return `${sign}${Math.floor(a / 60)} min ${Math.floor(a % 60)} s`;
+  if (a < DAY) return `${sign}${Math.floor(a / 3600)} h ${Math.floor((a % 3600) / 60)} min`;
+  if (a < YEAR) return `${sign}${Math.floor(a / DAY)} d ${Math.floor((a % DAY) / 3600)} h`;
+  return `${sign}${(a / YEAR).toFixed(3)} yr`;
+}
+
+/** Radians as `23.44°`. */
+export function formatAngle(rad: number): string {
+  const deg = (rad * 180) / Math.PI;
+  return `${deg < 0 ? MINUS : ''}${Math.abs(deg).toFixed(2)}°`;
+}
+
+/** Scientific notation with 4 significant figures and a superscript exponent. */
+export function formatScientific(x: number, unit: string): string {
+  if (x === 0) return `0 ${unit}`;
+  const exp = Math.floor(Math.log10(Math.abs(x)));
+  let mantissa = x / 10 ** exp;
+  let e = exp;
+  if (Math.abs(Number(mantissa.toFixed(3))) >= 10) {
+    mantissa /= 10;
+    e += 1;
+  }
+  const sup = [...String(Math.abs(e))].map((c) => SUPERSCRIPT[Number(c)]).join('');
+  return `${mantissa.toFixed(3)} × 10${e < 0 ? '⁻' : ''}${sup} ${unit}`;
+}
+
+/** `5.972 × 10²⁴ kg`. */
+export function formatMass(kg: number): string {
+  return formatScientific(kg, 'kg');
 }
