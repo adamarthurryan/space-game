@@ -1,6 +1,6 @@
 # Current Status
 
-Milestone 1, sprints 0 and 1 are complete. Sprint 0 (foundations): the toolchain, the lint-enforced layer rules, the `math/` layer, and the app shell with an empty 3D canvas. Sprint 1 (orbital math and the real solar system, headless): `math/time.ts`, the `orbital/` layer (Kepler, elements, propagation, frames, SOI), `sim/body.ts` (the body tree), and `gen/realSystem.ts` with its JPL data in `gen/data/` and a pinned Horizons fixture in `gen/fixtures/`. Nothing new is visible yet; the map is sprint 2. See `planning/milestone-1-sprints.md` for the next sprints.
+Milestone 1, sprints 0, 1 and 2 are complete. Sprint 0 (foundations): the toolchain, the lint-enforced layer rules, the `math/` layer, and the app shell with an empty 3D canvas. Sprint 1 (orbital math and the real solar system, headless): `math/time.ts`, the `orbital/` layer (Kepler, elements, propagation, frames, SOI), `sim/body.ts` (the body tree), and `gen/realSystem.ts` with its JPL data in `gen/data/` and a pinned Horizons fixture in `gen/fixtures/`. Sprint 2 (the map): the sim clock and world (`sim/clock.ts`, `sim/world.ts`, `gen/scenario.ts`), the map in `render/` (bodies, markers, orbit lines, labels, picking, the camera controller), the System tab, the body inspector, the live timeline and the map keys. Its R3F review recommends replacing R3F with plain three.js at the start of sprint 3; that decision is open (decision 90 in `docs/decisions.md`). See `planning/milestone-1-sprints.md` for the next sprints.
 
 # Scripts
 
@@ -10,7 +10,7 @@ Milestone 1, sprints 0 and 1 are complete. Sprint 0 (foundations): the toolchain
 - `npm test` — Vitest, once (`npm run test:watch` to watch)
 - `npm run lint` — ESLint, including the layer and determinism rules
 - `npm run format` / `npm run format:check` — Prettier (code only; Markdown is excluded)
-- `npm run smoke` — headless-browser check of the running app (needs Google Chrome; see `.claude/skills/run-app`)
+- `npm run smoke` — headless-browser checks of the running app shell and map (needs Google Chrome; see `.claude/skills/run-app`)
 
 Before finishing a change, `npm test`, `npm run lint`, `npm run build` and `npm run format:check` should pass, and `npm run smoke` too for visible changes.
 

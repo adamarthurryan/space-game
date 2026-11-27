@@ -59,8 +59,9 @@ src/
   content/    types.ts, registry.ts, resources.ts, recipes.ts, structures.ts,
               modules/ (one file per module type)
   store/      useWorld.ts, useView.ts, jobs.ts, jobWorker.ts
-  render/     Scene.tsx, BodyMesh.tsx, MinorBodies.tsx, OrbitLine.tsx, TrajectoryLine.tsx,
-              NodeGizmo.tsx, overlays/, camera/
+  render/     Scene.tsx, mapFrame.ts, projection.ts, precision.ts, picking.ts, Bodies.tsx,
+              BodyMarkers.tsx, OrbitLines.tsx, MinorBodies.tsx, TrajectoryLine.tsx, NodeGizmo.tsx,
+              overlays/ (labels, declutter), camera/ (controller, framing, rig)
   ui/         layout/, panels/, fleet/, timeline/, planner/, economy/, construction/, designer/
 ```
 
@@ -171,15 +172,19 @@ export const engines = [
 
 - **Units:** `km`, `s`, `kg`, `km/s`, `kW`, `mSv`. Time is seconds from the scenario epoch, as a float64 `number`.
 - **Precision:** a solar system spans ~10¹⁰ km, but docking happens at a few hundred metres. Float64 is enough, as long as relative positions between ships are computed in a frame local to the pair and not from heliocentric positions.
-- **Camera-relative rendering:** the GPU is float32. So every frame, positions minus the camera focus position are computed in float64, _then_ converted to float32. Orbit and trajectory polylines are generated in the focus body's frame and re-based when focus changes.
+- **Camera-relative rendering:** the GPU is float32. The scene's axes are the world axes in km, and its **origin is the camera focus point**: every frame, positions minus the origin are computed in float64, _then_ converted to float32 (`render/precision.ts`), so nothing on the GPU holds a world position. During a refocus the origin moves between the two bodies, both evaluated at the current `t` (decision 77).
+- **Depth:** a logarithmic depth buffer with fixed near (1e-3 km) and far (1e12 km) planes; every custom shader includes three's `logdepthbuf` chunks (decision 78).
+- **Orbit lines:** a body's orbit is drawn around its parent, resampled from its mean elements at `t` every frame in float64 and starting at the body, so the body always sits on its line (decision 80). Ship trajectory polylines (sprint 3) are generated in the focus body's frame and re-based when focus changes.
 - **Display scale:** bodies are drawn at true size when close, with a minimum screen-space size. Zoom is logarithmic. Minor bodies use instanced rendering, and their orbit lines are only drawn on demand.
 
 **Rendering conventions** (R3F is a thin shell; see decision 53):
 
 - JSX only decides **which objects exist**: keyed by ID, from world and view selectors. Per-frame state (positions, camera-relative offsets, scales, fades) is set through refs in `useFrame`, never through props.
-- One `useFrame` **per layer** (all bodies, all trajectories), iterating the world, rather than one per object.
-- The sim clock ticks in a single `useFrame` that runs before all render updates.
-- **Picking is screen-space** (`render/picking.ts`): project lines, points and labels and take the nearest within a pixel radius. R3F pointer events are used only for real meshes, such as gizmo handles and body spheres.
+- One `useFrame` **per stage** (all bodies, all orbits), iterating the world, rather than one per object. The stages run in a fixed order and share a per-scene `MapFrame` of plain arrays (`render/mapFrame.ts`): the clock, body world positions, the camera (which sets the origin), the projection of every body to the screen, the scene layers, then the labels (decision 84).
+- The sim clock ticks in the first stage, before all render updates.
+- **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest disc under the cursor, then a label, then the nearest marker within a pixel radius (decision 82). Map input uses DOM listeners on the canvas; R3F pointer events are not used.
+- **Bodies on screen:** true-size spheres, a fixed-size marker below 3 px of disc radius, and a body within 6 px of its parent's centre merges into it (decision 79).
+- **R3F review** (end of sprint 2): `render/` turned out mostly imperative, so the recommendation is to replace R3F with plain three.js at the start of sprint 3 (decision 90). The conventions above still hold, with stages and layers as classes instead of `useFrame` callbacks.
 - **Labels are a custom overlay** with priority decluttering, not drei `<Html>`. drei is added only for specific helpers that are needed.
 
 ## Celestial bodies

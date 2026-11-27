@@ -6,6 +6,7 @@ import { meanOrbitNormal } from '../../orbital/propagate';
 import { getBody } from '../../sim/body';
 import { useView } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
+import { registerDebug } from '../debugHandle';
 import { STAGE, frameWorldInto, useMapFrame, type MapFrame } from '../mapFrame';
 import { setFrameCamera } from '../projection';
 import {
@@ -76,6 +77,7 @@ export function CameraRig() {
     return createController(id, framingDistance(system, id), minDistance(system, id));
   });
   const [matrix] = useState(() => new Matrix4());
+  useEffect(() => registerDebug('controller', controller), [controller]);
 
   // Wheel and drag on the canvas.
   useEffect(() => {

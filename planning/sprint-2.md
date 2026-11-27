@@ -32,7 +32,7 @@ This expands [sprint 2](milestone-1-sprints.md#sprint-2--the-map) of milestone 1
 | S2-20 | Keyboard                  | **Space** play/pause, **,** / **.** warp down/up, **F** focus the selection, **E** / **P** snap, **Esc** clear the selection. Ignored while a text field has focus. The rest of the shortcut set is sprint 10. |
 | S2-21 | Debug handle              | In dev builds only, `window.__spaceGame` exposes read-only probes for the smoke test: the camera state, a body's projected screen position and disc radius, the placed labels, and the view and world stores. It is not compiled into production builds. |
 
-These should be copied into [decisions.md](../docs/decisions.md) at the end of the sprint.
+These are copied into [decisions.md](../docs/decisions.md) as decisions 75–90, with the implementation choices below.
 
 ## Files to create
 
@@ -454,7 +454,9 @@ Sprint 2 is done when all of these hold:
 
 ## Implementation notes
 
-Choices made while building, to be logged in decisions.md with S2-1 to S2-21.
+Choices made while building; the ones that affect later work are logged in decisions.md (75–90).
+
+- **Step 8.** The map smoke test measures the ×10⁷ warp only once the warp is set (the keypresses that step up from ×1 aren't counted), and runs for 4 s rather than 3 so the date always crosses into the next year. The no-jitter check reads the float64 projection through the debug handle, so it guards the camera and origin logic; the float32 path is covered by `precision.test.ts`. The console check ignores SwiftShader's "GPU stall due to ReadPixels" message, which Playwright's screenshots cause.
 
 - **Step 1.** The frame-stage priorities are `STAGE` in `render/mapFrame.ts`, not in `FrameLoop.tsx` (fast refresh needs component files to export only components). Play and Pause are one toggle button. `ui/format.ts` starts with `formatDate` and `formatWarp` only.
 - **Step 2, orbit spacing.** The spacing `u − k·sin(2πu)/(2π)` from the interface above can't pass its own accuracy test: for Earth's orbit in 256 segments it misses the true orbit by about 85 km within 1e5 km of Earth at k = 0.9, and by 1.8 km even at k = 1 (the error near the body is quadratic). `orbitSpacing` in `orbital/sample.ts` blends uniform spacing (k = 0) with a spacing whose density is ∝ (1 − cos 2πu)² (k = 1, the default), which grows as u⁴ away from the body: 0.53 km in the same test. Its widest chord, opposite the body, is 8/3 of the uniform one (about 80,000 km off for Earth's orbit, 0.2 px when that orbit fills the view). Next to the body the spacing is still about (1 − k) of uniform.
@@ -475,7 +477,33 @@ Choices made while building, to be logged in decisions.md with S2-1 to S2-21.
 
 ## R3F review
 
-To be written at the end of the sprint (decision 53): count what in `render/` uses JSX for more than deciding which objects exist, and what is refs and imperative code. If it is mostly imperative, plan the switch to plain three.js for sprint 3.
+Done at the end of the sprint, as decision 53 asks: how much of `render/` uses JSX for more than deciding which objects exist?
+
+**Inventory** (non-blank lines, test files excluded):
+
+| | Files | Lines | Notes |
+| --- | --- | --- | --- |
+| Plain TypeScript, no R3F | 15 | ~1,200 | controller, framing, projection, picking, declutter, label layout, fades, precision, styles, the line and marker object factories, the marker shader, the debug handle |
+| Components that use R3F | 8 | ~420 | `Scene`, `FrameLoop`, `CameraRig`, `Bodies`, `BodyMesh`, `OrbitLines`, `OrbitLine`, `BodyMarkers`, plus `LabelStage` in `LabelOverlay.tsx` |
+
+- **Objects declared in JSX:** the background colour, an ambient light, the Sun's point light, and one `<mesh>` (with its material) per body. That's all. Orbit lines (30 `THREE.Line`s) and markers (one `THREE.Points` with a custom shader) are built imperatively and mounted with `<primitive>`.
+- **Per-frame state:** 8 `useFrame` callbacks, all imperative, as the conventions require. No prop changes per frame.
+- **Input:** wheel, drag, hover, click and double-click are DOM listeners on `gl.domElement` (`CameraRig`, `useMapPointer`), and picking is screen-space. No R3F pointer events are used.
+- **Workarounds R3F caused:** the hooks lint forbids mutating hook values in callbacks, so every stage mutates through plain functions (`updateFrameBodies`, `projectFrame`, `placeLabels`, …); component files may export only components, so constants and factories moved to separate modules (`mapFrame.ts`, `orbitFade.ts`, `orbitLineObject.ts`). Both are harmless, but they are friction from React rather than help.
+- **What R3F does provide:** the canvas, renderer and camera, resized with the element and the device pixel ratio (the shell smoke test checks this); the render loop with ordered `useFrame` priorities; keyed mounting and disposal of the body meshes; and React context into the scene. Each is a few dozen lines in plain three.js: a `ResizeObserver`, a `requestAnimationFrame` loop over an ordered stage list, and an `add`/`dispose` per layer.
+
+**Verdict: mostly imperative.** JSX decides which objects exist for one layer (the body meshes) and two lights. Everything else is imperative code that R3F only hosts. Per decision 53, that means planning the switch.
+
+**Recommendation for sprint 3:** switch `render/` to plain three.js at the start of sprint 3, before trajectories add a second imperative line layer.
+
+- A `MapRenderer` class owns the `WebGLRenderer` (log depth), scene, camera, a `ResizeObserver` and the `requestAnimationFrame` loop, and runs the stages in the order of `STAGE` (clock, bodies, camera, projection, layers, labels). `Scene.tsx` stays a React component that creates it in an effect and disposes it on unmount, and still renders the DOM label overlay and passes the `MapFrame`.
+- Each layer (bodies, orbit lines, markers, and sprint 3's trajectories) becomes a class with `constructor(scene, frame, system)`, `update(frame, view)` and `dispose()`. The bodies layer rebuilds its meshes when the body system changes, which is what the keyed JSX does now.
+- The pure modules (controller, projection, picking, declutter, label layout, fades, precision, styles, marker material, object factories) carry over unchanged, as do their tests. So do `CameraRig`'s and `useMapPointer`'s DOM listeners, moved into the renderer or kept as hooks on the canvas element.
+- Two side benefits: the three.js pin to 0.182 (decision 48) exists only because R3F 9.8 uses the deprecated `THREE.Clock`, so it can be lifted; and the hooks-lint and fast-refresh workarounds go away.
+- Sprint 4's node gizmo was the one planned use of R3F pointer events (architecture.md). With plain three.js it uses a `Raycaster` against the handle meshes from the existing pointer listeners, which is about the same amount of code.
+- Estimated size: about 400 lines changed in `render/`, no changes outside it, and the smoke tests unchanged as the check.
+
+The decision is the user's: the alternative is to keep R3F as a host, which works and costs nothing now, at the price of the friction above as layers are added.
 
 ## Open questions
 

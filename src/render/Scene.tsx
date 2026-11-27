@@ -1,10 +1,11 @@
 import { Canvas } from '@react-three/fiber';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useWorld } from '../store/useWorld';
 import { Bodies } from './Bodies';
 import { BodyMarkers } from './BodyMarkers';
 import { CameraRig } from './camera/CameraRig';
 import { FrameLoop } from './FrameLoop';
+import { registerDebug } from './debugHandle';
 import { createMapFrame, MapFrameContext } from './mapFrame';
 import { OrbitLines } from './OrbitLines';
 import { createLabelRegistry } from './overlays/labelLayout';
@@ -23,6 +24,7 @@ export function Scene() {
   const system = useWorld((s) => s.world.system);
   const frame = useMemo(() => createMapFrame(system), [system]);
   const labels = useMemo(() => createLabelRegistry(frame), [frame]);
+  useEffect(() => registerDebug('frame', frame), [frame]);
 
   return (
     <div className={styles['scene']}>

@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "smoke": "node test/smoke/shell.mjs"
+    "smoke": "node test/smoke/shell.mjs && node test/smoke/map.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

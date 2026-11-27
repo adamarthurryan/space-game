@@ -11,17 +11,28 @@ description: Launch the space game in a browser and check that it works. Use whe
 npm run smoke
 ```
 
-`test/smoke/shell.mjs` starts Vite on port 5199 (`SMOKE_PORT` to change it), drives the
-installed Google Chrome headless through `playwright-core`, prints a PASS/FAIL line per check,
-and exits non-zero on any failure. It always stops the server it started.
+It runs `test/smoke/shell.mjs`, then `test/smoke/map.mjs`. Each starts Vite on port 5199
+(`SMOKE_PORT` to change it), drives the installed Google Chrome headless through
+`playwright-core`, prints a PASS/FAIL line per check, and exits non-zero on any failure. The
+shared server, browser and console watch are in `test/smoke/lib.mjs`; it always stops the server
+it started.
 
-It checks the app shell: the five layout regions, the WebGL canvas filling the map area with
-each side panel open and closed and after a window resize, and a console with no errors,
-warnings or failed requests. Screenshots are written to `test/smoke/out/` (git-ignored): read
-them to look at the result.
+- `shell.mjs` checks the app shell: the five layout regions, and the WebGL canvas filling the map
+  area with each side panel open and closed and after a window resize.
+- `map.mjs` checks the map (sprint 2's acceptance criteria): the System tab, selection and
+  refocus, Jupiter's moons labelled and apart, the E and P snaps, zooming out 21 notches from low
+  Earth orbit, no jitter at ×10⁵, a year at ×10⁷, and picking Mars by its label.
+- Both fail on any console error, warning or failed request, except SwiftShader's "GPU stall due
+  to ReadPixels" message, which the screenshots themselves cause.
 
-When a sprint adds something visible, add its checks to `test/smoke/shell.mjs` rather than
-writing a separate driver.
+Screenshots are written to `test/smoke/out/` (git-ignored): read them to look at the result.
+
+`map.mjs` reads the dev-only debug handle `window.__spaceGame` (`src/render/debugHandle.ts`):
+`camera()`, `body(id)` (screen position, disc, depth), `labels()`, `orbitNormal(id)`,
+`simTime()`, and the `view` and `world` stores. Use it from your own Playwright scripts too.
+
+When a sprint adds something visible, add its checks to the smoke file for that area (or a new
+file using `lib.mjs`, added to the `smoke` script) rather than writing a separate driver.
 
 ## Gotchas
 
