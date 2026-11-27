@@ -46,7 +46,7 @@ Source layout:
 ```
 src/
   math/       vec3.ts, units.ts, roots.ts, rng.ts, pqueue.ts
-  orbital/    elements.ts, kepler.ts, propagate.ts, soi.ts, lambert.ts, frames.ts,
+  orbital/    elements.ts, kepler.ts, propagate.ts, soi.ts, lambert.ts, frames.ts, passages.ts,
               approach.ts, integrate.ts, lagrange.ts
   sim/        clock.ts, events.ts, body.ts, ship.ts, station.ts, fleet.ts,
               trajectory.ts, maneuver.ts, thrustArc.ts, proximity.ts, alarms.ts,
@@ -60,11 +60,12 @@ src/
               modules/ (one file per module type)
   store/      useWorld.ts, useView.ts, jobs.ts, jobWorker.ts
   render/     Scene.tsx (React host), MapRenderer.ts, stages.ts, mapFrame.ts, projection.ts,
-              precision.ts, picking.ts, trajectoryGeometry.ts, trajectoryMarkers.ts, NodeGizmo.ts,
+              precision.ts, picking.ts, pathPicking.ts, screenDash.ts, trajectoryGeometry.ts,
+              trajectoryMarkers.ts, trajectoryMaterial.ts, nodeMarkers.ts, NodeGizmo.ts, nodeGizmoMath.ts,
               layers/ (bodies, orbits, trajectories, markers, minor bodies), input/ (camera,
               pointer), overlays/ (labels, declutter, trajectory markers), camera/ (controller,
               framing, camera stage)
-  ui/         layout/, panels/, fleet/, timeline/, planner/, economy/, construction/, designer/
+  ui/         layout/, panels/, fields/, fleet/, timeline/, planner/, economy/, construction/, designer/
 ```
 
 `gen/scenario.ts` builds the starting world for a scenario; `game/scenario.ts` holds the rules that run during it (goals, failure checks).
@@ -189,7 +190,8 @@ export const engines = [
 - **Frame stages** run in the order of `STAGES` (`render/stages.ts`) and share a per-scene `MapFrame` of plain arrays (`render/mapFrame.ts`), allocated once per body system: the clock, body world positions, ship world positions, the camera (which sets the origin, and may follow a ship), the projection of every body and ship to the screen, the scene layers, then the labels and trajectory markers (decisions 84, 92). The clock stage runs `advanceWorld`, which handles sim events, before all render updates. The ship arrays are reallocated only when the set of drawn ships changes.
 - **Layers** are classes (`render/layers/`: bodies, orbits, trajectories, markers, drawn in that order) with `update(frame, view)`, an optional `sync(world)` called when the store version changes, and `dispose()`. One layer per kind of object (all bodies, all orbits, all trajectories), iterating the world, rather than one object per entity. A layer rebuilds its three.js objects only when the set of entities changes, never per frame.
 - **Logic stays out of three.js:** projection, picking, decluttering, fades, framing and the camera controller are pure TypeScript modules, tested headlessly; the layers and the renderer only apply their results to three.js objects.
-- **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest ship marker within reach that isn't behind a nearer disc, then the nearest disc under the cursor, then a label, then the nearest body marker within a pixel radius (decisions 82, 110). Map input uses DOM listeners on the canvas. Real meshes that need exact hits, such as the node gizmo's handles (sprint 4), use a `Raycaster` from the same listeners.
+- **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest node glyph within reach, then the nearest ship marker within reach that isn't behind a nearer disc, then the nearest disc under the cursor, then a label, then the nearest body marker within a pixel radius (decisions 82, 110, 126). Where nothing is picked, the active ship's projected path gives the ghost node (`render/pathPicking.ts`). Map input uses DOM listeners on the canvas. The node gizmo's handles are real meshes, hit with a `Raycaster` from the same listeners, which claim gizmo and node drags (`stopImmediatePropagation`) before the camera input sees them (decision 127).
+- **Trajectory lines** use one `ShaderMaterial` (`render/trajectoryMaterial.ts`, with the logdepthbuf, tone-mapping and colour-space chunks). The planned path after the first node is dashed in screen space, from a per-vertex `lineDistance` in px computed on the CPU from the projected vertices (decision 124).
 - **Bodies on screen:** true-size spheres, a fixed-size marker below 3 px of disc radius, and a body within 6 px of its parent's centre merges into it (decision 79). **Ships** are 7 px triangles in their palette colour; a ship near its parent's centre merges the same way unless it is focused or selected (decision 110).
 - **Labels are a custom DOM overlay** with priority decluttering, positioned every frame by the labels stage (decision 83). Ship labels rank below dwarf planets and above moons. Trajectory marker texts are placed after the labels and give way to them (decision 109).
 
@@ -231,8 +233,11 @@ interface ConicSegment {
   v0: Vec3; // state at tStart, in the parent frame
   tStart: number;
   tEnd: number;
-  endEvent: 'soi-exit' | 'soi-enter' | 'impact' | 'horizon'; // sprint 4 adds 'maneuver'
+  endEvent: 'soi-exit' | 'soi-enter' | 'impact' | 'horizon' | 'maneuver';
   endTargetId?: BodyId; // the body entered, exited to, or impacted
+  endNodeId?: NodeId; // the node executed at the end ('maneuver')
+  dvApplied?: number; // km/s applied there; less than the node's when over budget
+  dvVector?: Vec3; // the Δv applied there, world axes
 }
 ```
 
@@ -241,11 +246,13 @@ A conic segment stores its starting state vector, because universal-variable pro
 **Coasting propagation** (`sim/trajectory.ts`, decisions 97, 98):
 
 1. Universal-variable Kepler propagation, which handles elliptic, parabolic and hyperbolic orbits in one formulation.
-2. Find the earliest of these events: the next node or arc (sprint 4), impact (`|r| = radius + atmosphere height`, inbound) and SOI exit (`|r| = soiRadius`, outbound), both solved in closed form from the conic (`orbital/soi.ts`, `timeToRadius`), and SOI entry into a major child body whose radial band overlaps the ship's. Entry is found by **conservative advancement** on `f(t) = |r_ship − r_child| − R_soi`, stepping `f / v_rel,max` (never less than `R_soi / (100·v_rel,max)`), then Brent on the first sign change, so an entry can't be stepped over (a graze shallower than about 1% of the SOI may be missed). Ties go to impact, then exit, then entry. A segment that starts on an SOI boundary never ends less than 1 s later.
-3. At the event: transform the state to the new frame, apply the Δv, or start a thrust segment.
-4. Stop after **5 segments** or at the **10-year horizon** from the trajectory's start.
+2. Find the earliest of these events: the next enabled node (or, in milestone 3, arc), impact (`|r| = radius + atmosphere height`, inbound) and SOI exit (`|r| = soiRadius`, outbound), both solved in closed form from the conic (`orbital/soi.ts`, `timeToRadius`), and SOI entry into a major child body whose radial band overlaps the ship's. Entry is found by **conservative advancement** on `f(t) = |r_ship − r_child| − R_soi`, stepping `f / v_rel,max` (never less than `R_soi / (100·v_rel,max)`), then Brent on the first sign change, so an entry can't be stepped over (a graze shallower than about 1% of the SOI may be missed). Ties go to a node, then impact, then exit, then entry. A segment that starts on an SOI boundary never ends less than 1 s later, except one that starts on its parent's SOI radius moving outward (a node tied with the exit), which exits at once.
+3. At the event: transform the state to the new frame, apply the Δv in the local orbital frame of the pre-burn state (prograde `v̂`, normal `ĥ`, radial out `v̂ × ĥ`), or start a thrust segment.
+4. Stop after **5 segments** or at the **10-year horizon** from the trajectory's start. Segments that end at a node don't count, so five patches are computed after the last node; a node past the end is **not reached**, and is neither drawn nor executed (decision 116).
 
-A ship's `orbit` is the state at the start of its **current** segment: it is re-based at every SOI event and at the horizon, so the current segment is always segment 0, and up to five patches are always computed ahead (decision 96).
+The trajectory spends the ship's Δv node by node: every engine fires together at the combined Isp, so Δv adds up, and a node that asks for more than is left gets what's left, in its own direction (decision 117). Its segment records the magnitude and vector applied, and execution applies exactly that vector, so the executed orbit is the predicted one (decision 118).
+
+A ship's `orbit` is the state at the start of its **current** segment: it is re-based at every SOI event, at every node it executes and at the horizon, so the current segment is always segment 0, and up to five patches are always computed ahead (decision 96).
 
 **Thrust segments** (milestone 3):
 
@@ -270,9 +277,8 @@ interface ThrustSegment {
 
 ```ts
 interface ManeuverNode {
-  // impulsive (planning abstraction)
-  id: NodeId;
-  shipId: ShipId;
+  // impulsive (planning abstraction); stored on its ship as `ship.plan`, sorted by t
+  id: NodeId; // `node-<n>`, unique across ships
   t: number;
   enabled: boolean;
   dv: { prograde: number; normal: number; radial: number }; // km/s, local orbital frame
@@ -294,7 +300,7 @@ interface ThrustArc {
 
 A node with `execution: 'finite'` is converted to a thrust segment of the same Δv when the trajectory is computed. The burn duration of a node (from thrust and mass) is always shown, and a node whose burn is long compared with the orbit period is flagged.
 
-**Caching:** trajectories are computed lazily, and cached by ship state plus plan. Only the active ship's plan can be edited, so interactive recomputation only ever affects one ship. While a handle is being dragged, thrust arcs are integrated with a coarser tolerance; the full-accuracy result replaces it when the drag ends.
+**Caching:** each trajectory carries a key of its inputs: the ship's status and orbit, its enabled nodes and the Δv available, with numbers written exactly. A ship whose key is unchanged isn't recomputed, and the last 4 trajectories of each ship are kept by key in `world.derived` (not saved), so undoing an edit is a cache hit (decision 121). Only the active ship's plan can be edited, so interactive recomputation only ever affects one ship, and a gizmo drag applies at most one edit per animation frame. While a handle is being dragged, thrust arcs (milestone 3) are integrated with a coarser tolerance; the full-accuracy result replaces it when the drag ends.
 
 ## Closest approach and docking detection
 
@@ -353,8 +359,8 @@ Ship and station stockpiles, facilities, crew and construction are advanced in *
 
 ## Clock and event queue
 
-- `clock` holds `t`, the warp step and `paused`. Each frame, `advanceWorld` (`sim/world.ts`) aims for `t + min(dt_wall, 0.25 s) × warp`; while the next event in the **priority queue** is due by then, it sets `t` to the event's time exactly and dispatches it. Handlers may queue events, which run in the same frame if due. At most 256 events run per frame; past that, `t` stays at the last one and time runs slower rather than skipping events (decision 99). Economy steps run for the sim time that passes.
-- Each ship has **at most one pending event**: the end of its current segment (`soi-change`, `impact` or `trajectory-horizon`). An event carries the trajectory version it was queued for, and a handler ignores a stale one (decisions 99, 100).
+- `clock` holds `t`, the warp step, `paused` and `pauseOn` (which event types pause the clock: node execution by default, SOI changes and impacts on request; decision 120). Each frame, `advanceWorld` (`sim/world.ts`) aims for `t + min(dt_wall, 0.25 s) × warp`; while the next event in the **priority queue** is due by then, it sets `t` to the event's time exactly and dispatches it. Handlers may queue events, which run in the same frame if due. At most 256 events run per frame; past that, `t` stays at the last one and time runs slower rather than skipping events (decision 99). Economy steps run for the sim time that passes.
+- Each ship has **at most one pending event**: the end of its current segment (`node`, `soi-change`, `impact` or `trajectory-horizon`). An event carries the trajectory version it was queued for, and a handler ignores a stale one (decisions 99, 100).
 - **Derived data:** the trajectories and the event queue live in `world.derived`, and `rebuildDerived(world)` recomputes them from the ships. Saves strip `derived` and rebuild it, so the queue is never saved (decision 101).
 - Event sources:
   - plans: nodes, the start and end of arcs;
@@ -364,7 +370,7 @@ Ship and station stockpiles, facilities, crew and construction are advanced in *
   - the environment: storm warning and onset;
   - alarms, and scenario events.
 - Handlers are registered by event type in an `EventRegistry` object passed to `advanceWorld` (`sim/events.ts`), so the queue doesn't import higher layers and no module-level state is shared. The store creates the registry with the ship handlers.
-- At each event, the handler decides whether to pause, drop warp, or continue.
+- At each event, the handler decides whether to pause, drop warp, or continue. A handler that acts on an event of a type ticked in `pauseOn` asks to pause; `advanceWorld` then pauses the clock with `t` at that event's time exactly and handles nothing more that frame.
 - Physical state changes only at events: plan execution, docking, undocking, construction completion. **Preview time** is view state only. Rendering reads `viewTime`; the sim only advances `t`.
 
 ## Alarms

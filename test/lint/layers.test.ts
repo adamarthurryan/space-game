@@ -202,6 +202,36 @@ const cases: Case[] = [
     target: '../game/actions',
     expected: [],
   },
+  // Sprint 4 (planning/sprint-4.md, "Lint rules").
+  {
+    file: 'src/orbital/bad.ts',
+    code: "import { applyNode } from '../sim/maneuver';\nexport const x = applyNode;\n",
+    target: '../sim/maneuver',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/sim/bad.ts',
+    code: "import { useView } from '../store/useView';\nexport const x = useView;\n",
+    target: '../store/useView',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/sim/bad.ts',
+    code: "import { Raycaster } from 'three';\nexport const x = Raycaster;\n",
+    expected: [RESTRICTED_IMPORT],
+  },
+  {
+    file: 'src/game/ok.ts',
+    code: "import { planBudget } from '../sim/maneuver';\nexport const x = planBudget;\n",
+    target: '../sim/maneuver',
+    expected: [],
+  },
+  {
+    file: 'src/render/ok.ts',
+    code: "import { useWorld } from '../store/useWorld';\nexport const x = useWorld;\n",
+    target: '../store/useWorld',
+    expected: [],
+  },
   {
     file: 'src/misc/bad.ts',
     code: 'export const x = 1;\n',

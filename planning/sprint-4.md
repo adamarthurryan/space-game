@@ -407,6 +407,27 @@ Sprint 4 is done when all of these hold:
 8. `NodeGizmo` and `nodeGizmoMath`: handles, raycast, drag sensitivity, the time drag, and the per-frame edit coalescing.
 9. `maneuvers.mjs`, the debug probes, the lint cases, and the docs.
 
+## Implementation notes
+
+Choices made while building, beyond the decisions above. They are logged in [decisions.md](../docs/decisions.md) with decisions 114–135.
+
+1. **Radial sign.** The plan first wrote radial out as `ĥ × v̂`, which points inward (`(r × v) × v = −v²r + (r·v)v`). It is `v̂ × ĥ`, fixed in S4-2.
+2. **Execution equals prediction.** A `'maneuver'` segment stores the Δv vector it applied (`dvVector`) as well as its magnitude. The node handler moves the ship with `transitionState`, the same code the prediction used, so the executed orbit is bitwise the predicted one (the smoke test sees 0 km difference).
+3. **Nodes on an SOI boundary.** A node exactly at an SOI exit (ties go to the node) left the post-burn state numerically just inside the SOI, where `timeToRadius` finds no outbound crossing. A start within 1e-9 of the SOI radius moving outward now exits at once (decision 134).
+4. **Pausing.** Handlers decide: one that acts returns `{ pause: true }` when its type is ticked in `pauseOn`, so a stale event never pauses. `advanceWorld` then stops at that event (it used to return the flag and carry on). An impact also clears the ship's plan.
+5. **Focus vs. selection.** `MapObjectRef` gained nodes, but the camera can't focus one, so `focus` is a narrower `FocusRef` (body or ship), and `focusRefOf` maps a node to its ship. The compiler then listed every camera and label path to update.
+6. **The TLI scan.** A grid of departure times and Δv missed the narrow band of lunar periapses, and the first hit was an encounter 23 days out, after several loops. `findTli` brackets the lunar periapsis against 200 km in Δv for each departure time, bisects, requires SOI entry within 6 days, and keeps the cheapest; it takes about 1 s. Its result is rounded to whole seconds and 1 mm/s for typing: **T+3,600 s, 3.130535 km/s** (lunar Pe 201 km, entry after 3.5 days).
+7. **Where the tests live.** The full lunar flight goes through the actions, so it is `game/lunarFlight.test.ts` (`gen/` may not import `game/`). The check that `maneuvers.mjs` types the same TLI as `SMOKE_TLI` is `test/smoke/constants.test.ts`, which compares the two files' text, because `src/` tests have no Node types and the `test/` config can't import `src/` modules.
+8. **"Next" passages.** `addNodeAt` searches the planned path after the last enabled, reached node, segment by segment; on an escape trajectory "next Ap" is the aphelion in the Sun's frame. Kestrel's orbit is exactly circular, so it has no periapsis: the action says so.
+9. **Field nudges** have explicit steps: Δv 1 m/s (Shift 0.1, Alt 10), time 10 s (Shift 1 s, Alt 10 min). `nudgeStep` lives in `ui/fields/nudge.ts`, apart from the component, for fast refresh. The field keeps the latest props in a ref updated in a layout effect (not during render), for its non-passive wheel listener.
+10. **The active ship is highlighted.** Its trajectory is drawn at full strength and its Pe/Ap markers are shown, as for the selected ship (interface.md: "The active ship's trajectory is drawn at full strength").
+11. **One line material.** Every trajectory piece uses the dash-capable `ShaderMaterial`; `lineDistance` is computed only for dashed pieces, and the projection only for those and the active ship's main pieces (for the ghost). Each segment has a third piece, `rest`, for the current orbit after a node.
+12. **Node glyphs** are part of the trajectory marker overlay (◆ in the ship's colour; the selected node larger, other ships' smaller, disabled ones faded), placed in the labels stage, which records their screen positions in `frame.nodes` for picking. The ghost's text uses `formatCountdown`, passed into `Scene` like `formatDistance`.
+13. **The ghost click.** A click creates the node where the ghost was when the button went down, not where a later frame's path puts it (a 0.06 s difference in the smoke test before the fix).
+14. **The gizmo.** Its hit spheres are invisible (`colorWrite: false`) but raycastable. Seen down the orbit pole, the normal handles projected onto the node's centre and swallowed node drags: handles under 35% of their arm length on screen are hidden, and a press within 10 px of the centre drags the node (decision 135). The handle tooltip is the canvas's `title`. Edits are flushed at the start of each frame, before the clock stage. The time drag samples the first revolution of each segment of the path without the node, and keeps the node at least 1.5 s after now.
+15. **Toolbar and keys.** Orbit plane, Focus, F and P treat a selected node as its ship; Delete or Backspace deletes the selected node and selects its ship.
+16. **Debug handle.** Besides S4-20, `activePath()` returns the active ship's projected path pieces, which the smoke test hovers.
+
 ## Questions settled before the sprint
 
 1. **Active ship:** the last selected ship. It stays active when a body is selected (S4-9).

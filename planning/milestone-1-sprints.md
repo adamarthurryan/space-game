@@ -83,6 +83,7 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 - Live feedback: Δv used and remaining (red when over budget), propellant used, burn duration warning, resulting orbit or encounter ("Moon encounter, Pe 230 km, in 3 d").
 
 - **Detailed plan:** [sprint-4.md](sprint-4.md) (decisions S4-1 to S4-20).
+- **Outcome:** done; see the implementation notes in [sprint-4.md](sprint-4.md#implementation-notes) and decisions 114–135. The clock's "Pause on" control (pause at node execution, SOI changes or impacts) was added at the user's request, ahead of sprint 5's warp drops.
 
 **Done when:** you can plan and execute a trans-lunar injection and a lunar orbit insertion by hand, and the executed orbit matches the prediction.
 

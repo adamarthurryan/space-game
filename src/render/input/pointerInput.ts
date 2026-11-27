@@ -34,6 +34,8 @@ type Claim =
 export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: NodeGizmo): () => void {
   let press: { id: number; x: number; y: number; moved: boolean } | null = null;
   let claim: Claim | null = null;
+  /** The ghost shown when the button went down: a click creates the node there (S4-12). */
+  let pressGhost: MapFrame['ghost'] = null;
 
   const local = (e: MouseEvent) => {
     const r = el.getBoundingClientRect();
@@ -102,6 +104,7 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
   const onDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
     const p = local(e);
+    pressGhost = frame.ghost;
     frame.ghost = null;
     const handle = gizmo.hitHandle(p.x, p.y, frame);
     if (handle && gizmo.beginHandleDrag(handle, p.x, p.y, frame, e)) {
@@ -140,9 +143,10 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
       useView.getState().select(hit);
       return;
     }
-    // A click on the active ship's path creates a node there (S4-12).
-    updateGhost(e, null);
-    const g = frame.ghost;
+    // A click on the active ship's path creates a node where the ghost was (S4-12).
+    if (!pressGhost) updateGhost(e, null);
+    const g = pressGhost ?? frame.ghost;
+    pressGhost = null;
     if (!g) return;
     const r = useWorld.getState().addNode(g.shipId, { t: g.t });
     if (r.ok) useView.getState().select({ kind: 'node', shipId: g.shipId, id: r.value });
