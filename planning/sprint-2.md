@@ -452,6 +452,16 @@ Sprint 2 is done when all of these hold:
 7. `useView` selection and focus, the System tab, the body inspector, the map toolbar and the keys.
 8. The smoke test, then the R3F review, the lint cases and the docs.
 
+## Implementation notes
+
+Choices made while building, to be logged in decisions.md with S2-1 to S2-21.
+
+- **Step 1.** The frame-stage priorities are `STAGE` in `render/mapFrame.ts`, not in `FrameLoop.tsx` (fast refresh needs component files to export only components). Play and Pause are one toggle button. `ui/format.ts` starts with `formatDate` and `formatWarp` only.
+- **Step 2, orbit spacing.** The spacing `u − k·sin(2πu)/(2π)` from the interface above can't pass its own accuracy test: for Earth's orbit in 256 segments it misses the true orbit by about 85 km within 1e5 km of Earth at k = 0.9, and by 1.8 km even at k = 1 (the error near the body is quadratic). `orbitSpacing` in `orbital/sample.ts` blends uniform spacing (k = 0) with a spacing whose density is ∝ (1 − cos 2πu)² (k = 1, the default), which grows as u⁴ away from the body: 0.53 km in the same test. Its widest chord, opposite the body, is 8/3 of the uniform one (about 80,000 km off for Earth's orbit, 0.2 px when that orbit fills the view). Next to the body the spacing is still about (1 − k) of uniform.
+- **Step 2, orbit normal.** `meanOrbitNormal` is the ellipse's normal turned to the side of the body's actual motion (the sign of `W · (r × v)` with rates). Tethys has n < 0, but its apsidal rate carries it prograde (S1-18), so the sign of n alone would point its normal the wrong way.
+- **Step 2, shared geometry.** `orbital/propagate.ts` has `meanOrbitGeometryInto` (a, b, e, E at t and the perifocal axes P, Q, W in ecliptic axes) and `meanPositionInto`, which `bodyWorldPositionsInto` and `sampleMeanOrbitInto` use. `frames.ts` has `planeToEclipticInPlace`. Apart from the Kepler solve's small result object, nothing allocates per frame.
+- **Step 2, tests.** Tests with real bodies (the Moon, Triton, Tethys, and every body for `bodyWorldPositionsInto`) are in `gen/realSystem.test.ts`, since `orbital/` and `sim/` tests may not import `gen/`. The `orbital/` tests use synthetic elements in the same roles. Positions match `bodyWorldState` to max(1e-6 km, 1e-15·|r|): an ulp at Uranus is 5e-7 km.
+
 ## R3F review
 
 To be written at the end of the sprint (decision 53): count what in `render/` uses JSX for more than deciding which objects exist, and what is refs and imperative code. If it is mostly imperative, plan the switch to plain three.js for sprint 3.

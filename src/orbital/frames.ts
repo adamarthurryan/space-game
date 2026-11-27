@@ -39,6 +39,27 @@ export function eclipticToPlane(plane: ReferencePlane, v: Vec3): Vec3 {
   );
 }
 
+/** As `planeToEcliptic`, rotating `v` in place (for per-frame loops). Returns v. */
+export function planeToEclipticInPlace(plane: ReferencePlane, v: Vec3): Vec3 {
+  // Rx(π/2 − δ): cos = sin δ, sin = cos δ.
+  const cd = Math.cos(plane.poleDec);
+  const sd = Math.sin(plane.poleDec);
+  const y1 = v.y * sd - v.z * cd;
+  const z1 = v.y * cd + v.z * sd;
+  // Rz(α + π/2): cos = −sin α, sin = cos α.
+  const ca = Math.cos(plane.poleRa);
+  const sa = Math.sin(plane.poleRa);
+  const x2 = -v.x * sa - y1 * ca;
+  const y2 = v.x * ca - y1 * sa;
+  // Rx(−ε).
+  const ce = Math.cos(OBLIQUITY_J2000);
+  const se = Math.sin(OBLIQUITY_J2000);
+  v.x = x2;
+  v.y = y2 * ce + z1 * se;
+  v.z = -y2 * se + z1 * ce;
+  return v;
+}
+
 /** The plane's pole as a unit vector in ecliptic axes. */
 export function planePole(plane: ReferencePlane): Vec3 {
   return planeToEcliptic(plane, { x: 0, y: 0, z: 1 });

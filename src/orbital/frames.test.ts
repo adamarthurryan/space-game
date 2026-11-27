@@ -11,6 +11,7 @@ import {
   OBLIQUITY_J2000,
   planePole,
   planeToEcliptic,
+  planeToEclipticInPlace,
   subState,
 } from './frames';
 
@@ -118,5 +119,22 @@ describe('translations', () => {
     const round = subState(addState(s, origin), origin);
     expectVecClose(round.r, s.r, 3e-8);
     expectVecClose(round.v, s.v, 1e-14);
+  });
+});
+
+describe('planeToEclipticInPlace', () => {
+  it('matches planeToEcliptic and mutates its argument', () => {
+    const rng = createRng(7);
+    for (let k = 0; k < 50; k++) {
+      const plane: ReferencePlane = {
+        poleRa: range(rng, 0, 2 * Math.PI),
+        poleDec: range(rng, -Math.PI / 2, Math.PI / 2),
+      };
+      const v = vec3(range(rng, -1e9, 1e9), range(rng, -1e9, 1e9), range(rng, -1e9, 1e9));
+      const expected = planeToEcliptic(plane, v);
+      const w = { ...v };
+      expect(planeToEclipticInPlace(plane, w)).toBe(w);
+      expectVecClose(w, expected, 1e-15 * norm(v) * 4);
+    }
   });
 });

@@ -4,9 +4,9 @@
  */
 
 import { TWO_PI, wrapPi, wrapTwoPi } from '../math/units';
-import { addScaled, cross, rotateX, rotateZ, type Vec3 } from '../math/vec3';
+import { addScaled, cross, rotateX, rotateZ, vec3, type Vec3 } from '../math/vec3';
 import { stateFromElements, type MeanElements, type StateVector } from './elements';
-import { planeToEcliptic } from './frames';
+import { planeToEcliptic, planeToEclipticInPlace } from './frames';
 import { solveKeplerElliptic, solveUniversal, trueFromEccentric } from './kepler';
 
 /** Universal-variable propagation of any conic, for any sign of dt. */
@@ -145,4 +145,104 @@ export function stateFromMeanElements(m: MeanElements, t: number): StateVector {
 
   if (!m.plane) return s;
   return { r: planeToEcliptic(m.plane, s.r), v: planeToEcliptic(m.plane, s.v) };
+}
+
+// ---- Orbit geometry -------------------------------------------------------------------------
+
+/**
+ * The shape and orientation of a mean-element orbit at t, in ecliptic axes, plane rotation
+ * applied. A point at eccentric anomaly E is `a(cos E − e)·P + b·sin E·Q`, relative to the
+ * parent. W = P × Q is the normal of the ellipse's parametrisation; the body moves along it
+ * with increasing E only if n > 0.
+ */
+export interface MeanOrbitGeometry {
+  a: number;
+  e: number;
+  /** Semi-minor axis. */
+  b: number;
+  /** Eccentric anomaly of the body at t. */
+  E: number;
+  P: Vec3;
+  Q: Vec3;
+  W: Vec3;
+}
+
+export function createMeanOrbitGeometry(): MeanOrbitGeometry {
+  return { a: 0, e: 0, b: 0, E: 0, P: vec3(0, 0, 0), Q: vec3(0, 0, 0), W: vec3(0, 0, 0) };
+}
+
+/**
+ * The geometry at t, written into `out`. Uses the same elements as `stateFromMeanElements`
+ * (rates applied linearly), so the point at `out.E` is the body's position at t. One Kepler
+ * solve; no other allocation.
+ */
+export function meanOrbitGeometryInto(
+  m: MeanElements,
+  t: number,
+  out: MeanOrbitGeometry,
+): MeanOrbitGeometry {
+  const rates = m.rates;
+  const a = m.a + (rates?.a ?? 0) * t;
+  const e = m.e + (rates?.e ?? 0) * t;
+  const i = m.i + (rates?.i ?? 0) * t;
+  // Wrapped as in meanElementsAt, so the rounding matches stateFromMeanElements.
+  const lan = wrapTwoPi(m.lan + (rates?.lan ?? 0) * t);
+  const argp = wrapTwoPi(m.argp + (rates?.argp ?? 0) * t);
+  out.a = a;
+  out.e = e;
+  out.b = a * Math.sqrt(1 - e * e);
+  out.E = solveKeplerElliptic(wrapTwoPi(m.meanAnomaly + m.meanMotion * t), e);
+
+  // Rz(Ω)·Rx(i)·Rz(ω) applied to the perifocal axes.
+  const cO = Math.cos(lan);
+  const sO = Math.sin(lan);
+  const cI = Math.cos(i);
+  const sI = Math.sin(i);
+  const cW = Math.cos(argp);
+  const sW = Math.sin(argp);
+  const { P, Q, W } = out;
+  P.x = cO * cW - sO * sW * cI;
+  P.y = sO * cW + cO * sW * cI;
+  P.z = sW * sI;
+  Q.x = -cO * sW - sO * cW * cI;
+  Q.y = -sO * sW + cO * cW * cI;
+  Q.z = cW * sI;
+  W.x = sO * sI;
+  W.y = -cO * sI;
+  W.z = cI;
+  if (m.plane) {
+    planeToEclipticInPlace(m.plane, P);
+    planeToEclipticInPlace(m.plane, Q);
+    planeToEclipticInPlace(m.plane, W);
+  }
+  return out;
+}
+
+const scratchGeometry = createMeanOrbitGeometry();
+
+/**
+ * The position at t relative to the parent, as `stateFromMeanElements(m, t).r`, written into
+ * `out` without allocating (for per-frame loops).
+ */
+export function meanPositionInto(m: MeanElements, t: number, out: Vec3): Vec3 {
+  const g = meanOrbitGeometryInto(m, t, scratchGeometry);
+  const x = g.a * (Math.cos(g.E) - g.e);
+  const y = g.b * Math.sin(g.E);
+  out.x = x * g.P.x + y * g.Q.x;
+  out.y = x * g.P.y + y * g.Q.y;
+  out.z = x * g.P.z + y * g.Q.z;
+  return out;
+}
+
+/**
+ * Unit orbit normal (direction of h) at t, in ecliptic axes, plane rotation applied: the
+ * ellipse's normal W, turned to the side of the body's actual motion. That is −W when n < 0
+ * (S1-18), unless the rates carry the body forwards anyway, as Tethys's apsidal rate does.
+ */
+export function meanOrbitNormal(m: MeanElements, t: number): Vec3 {
+  const W = meanOrbitGeometryInto(m, t, createMeanOrbitGeometry()).W;
+  const s = stateFromMeanElements(m, t);
+  const h = cross(s.r, s.v);
+  const sign = h.x * W.x + h.y * W.y + h.z * W.z < 0 ? -1 : 1;
+  return vec3(sign * W.x, sign * W.y, sign * W.z);
 }

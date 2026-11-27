@@ -3,9 +3,13 @@ import { J2000_JD } from '../math/time';
 import { DEG, SECONDS_PER_DAY, TWO_PI } from '../math/units';
 import { angleBetween, norm, scale, sub, vec3, type Vec3 } from '../math/vec3';
 import { equatorialToEcliptic } from '../orbital/frames';
+import { meanOrbitNormal, stateFromMeanElements } from '../orbital/propagate';
+import { sampleMeanOrbitInto } from '../orbital/sample';
 import {
   bodyLocalState,
+  bodyOrder,
   bodyPole,
+  bodyWorldPositionsInto,
   bodyStateIn,
   bodyWorldState,
   getBody,
@@ -389,5 +393,67 @@ describe('the real body tree', () => {
     const copy = JSON.parse(JSON.stringify(AT_J2000)) as BodySystem;
     expect(copy).toEqual(AT_J2000);
     expect(bodyWorldState(copy, 'titan', 1e8)).toEqual(bodyWorldState(AT_J2000, 'titan', 1e8));
+  });
+});
+
+describe('map helpers on the real system (sprint 2)', () => {
+  it('bodyWorldPositionsInto matches bodyWorldState for every body, at 10 times', () => {
+    const order = bodyOrder(AT_J2000);
+    expect(order).toHaveLength(31);
+    const out = new Float64Array(3 * order.length);
+    for (let k = 0; k < 10; k++) {
+      // ±300 years around the epoch.
+      const t = -1e10 + k * 2.2e9;
+      bodyWorldPositionsInto(AT_J2000, order, t, out);
+      order.forEach((id, i) => {
+        const r = bodyWorldState(AT_J2000, id, t).r;
+        const p = vec3(out[3 * i]!, out[3 * i + 1]!, out[3 * i + 2]!);
+        // 1e-6 km, or a few ulps for the outer planets (an ulp at 3e9 km is 5e-7 km).
+        const tol = Math.max(1e-6, 1e-15 * norm(r));
+        expect(norm(sub(p, r)), `${id} at t = ${t}`).toBeLessThan(tol);
+      });
+    }
+  });
+
+  it("the Moon's orbit normal is about 5.1° from the ecliptic pole", () => {
+    const orbit = getBody(AT_J2000, 'moon').orbit!;
+    const angle = angleBetween(meanOrbitNormal(orbit, 0), vec3(0, 0, 1)) / DEG;
+    expect(angle).toBeGreaterThan(4.9);
+    expect(angle).toBeLessThan(5.3);
+  });
+
+  it('the orbit normal is r × v for Triton (retrograde) and Tethys (n < 0)', () => {
+    for (const id of ['triton', 'tethys']) {
+      const orbit = getBody(AT_J2000, id).orbit!;
+      const s = stateFromMeanElements(orbit, 1e7);
+      const h = vec3(
+        s.r.y * s.v.z - s.r.z * s.v.y,
+        s.r.z * s.v.x - s.r.x * s.v.z,
+        s.r.x * s.v.y - s.r.y * s.v.x,
+      );
+      // The nodal and apsidal rates tilt v slightly out of the plane (Triton: 0.0008°).
+      expect(angleBetween(meanOrbitNormal(orbit, 1e7), h) / DEG, id).toBeLessThan(0.01);
+    }
+    // Tethys has n < 0 but moves prograde: its apsidal rate exceeds |n| (S1-18).
+    const tethys = getBody(AT_J2000, 'tethys').orbit!;
+    expect(tethys.meanMotion).toBeLessThan(0);
+    const saturnPole = bodyPole(getBody(AT_J2000, 'saturn'))!;
+    expect(angleBetween(meanOrbitNormal(tethys, 0), saturnPole) / DEG).toBeLessThan(2);
+  });
+
+  it('orbit samples start at the body for planets, the Moon, Triton and Tethys', () => {
+    const N = 256;
+    const out = new Float64Array(3 * (N + 1));
+    for (const id of ['mercury', 'earth', 'jupiter', 'neptune', 'moon', 'triton', 'tethys']) {
+      const orbit = getBody(AT_J2000, id).orbit!;
+      for (const t of [0, 4.4e8, -6e9]) {
+        sampleMeanOrbitInto(orbit, t, N, out);
+        const r = stateFromMeanElements(orbit, t).r;
+        const start = vec3(out[0]!, out[1]!, out[2]!);
+        const end = vec3(out[3 * N]!, out[3 * N + 1]!, out[3 * N + 2]!);
+        expect(norm(sub(start, r)) / norm(r), `${id} at t = ${t}`).toBeLessThan(1e-9);
+        expect(end).toEqual(start);
+      }
+    }
   });
 });

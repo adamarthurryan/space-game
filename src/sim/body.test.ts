@@ -7,6 +7,8 @@ import {
   ancestors,
   bodyLocalState,
   bodyMass,
+  bodyOrder,
+  bodyWorldPositionsInto,
   bodyPole,
   bodyStateIn,
   bodyWorldState,
@@ -355,6 +357,43 @@ describe('plain data', () => {
     for (const id of Object.keys(sys.bodies)) {
       expect(bodyWorldState(copy, id, 1.23e8)).toEqual(bodyWorldState(sys, id, 1.23e8));
     }
+  });
+});
+
+describe('per-frame positions', () => {
+  it('bodyOrder lists every body once, parents before children, children by a', () => {
+    const sys = build();
+    const order = bodyOrder(sys);
+    expect([...order].sort()).toEqual(Object.keys(sys.bodies).sort());
+    order.forEach((id, i) => {
+      const parentId = getBody(sys, id).parentId;
+      if (parentId !== null) expect(order.indexOf(parentId)).toBeLessThan(i);
+    });
+    expect(order).toEqual(['star', 'terra', 'luna', 'jove', 'pebble', 'io', 'europa']);
+  });
+
+  it('bodyWorldPositionsInto matches bodyWorldState at 10 times', () => {
+    const sys = build();
+    const order = bodyOrder(sys);
+    const out = new Float64Array(3 * order.length);
+    for (let k = 0; k < 10; k++) {
+      const t = -5e9 + k * 1.1e9;
+      bodyWorldPositionsInto(sys, order, t, out);
+      order.forEach((id, i) => {
+        const r = bodyWorldState(sys, id, t).r;
+        expect(norm(sub(vec3(out[3 * i]!, out[3 * i + 1]!, out[3 * i + 2]!), r))).toBeLessThan(
+          1e-6,
+        );
+      });
+    }
+  });
+
+  it('bodyWorldPositionsInto rejects an order with a child before its parent', () => {
+    const sys = build();
+    const order = [...bodyOrder(sys)].reverse();
+    expect(() => bodyWorldPositionsInto(sys, order, 0, new Float64Array(3 * order.length))).toThrow(
+      /must come before/,
+    );
   });
 });
 

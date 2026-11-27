@@ -11,7 +11,14 @@ import {
   type StateVector,
 } from './elements';
 import { meanFromTrue, solveKeplerHyperbolic, trueFromHyperbolic, trueFromMean } from './kepler';
-import { meanElementsAt, propagate, propagateInto, stateFromMeanElements } from './propagate';
+import {
+  meanElementsAt,
+  meanOrbitNormal,
+  meanPositionInto,
+  propagate,
+  propagateInto,
+  stateFromMeanElements,
+} from './propagate';
 import { planeToEcliptic } from './frames';
 
 const MU_EARTH = 398_600.4418;
@@ -332,4 +339,42 @@ describe('mean elements', () => {
     expect(norm(sub(rotated.r, planeToEcliptic(plane, local.r)))).toBeLessThan(1e-9);
     expect(norm(sub(rotated.v, planeToEcliptic(plane, local.v)))).toBeLessThan(1e-15);
   });
+});
+
+describe('meanPositionInto and meanOrbitNormal', () => {
+  const base: MeanElements = {
+    a: 384_400,
+    e: 0.0549,
+    i: 0.09,
+    lan: 2.1,
+    argp: 5.5,
+    meanAnomaly: 1.3,
+    meanMotion: 2.66e-6,
+  };
+  const cases: Record<string, MeanElements> = {
+    plain: base,
+    rates: { ...base, rates: { a: 1e-6, e: 1e-12, i: 1e-11, lan: -1.07e-8, argp: 2.25e-8 } },
+    plane: { ...base, i: 2.7, plane: { poleRa: 5.2, poleDec: 0.75 } },
+    negativeN: { ...base, meanMotion: -2e-6, plane: { poleRa: 0.7, poleDec: 1.4 } },
+  };
+
+  for (const [name, m] of Object.entries(cases)) {
+    it(`${name}: the position equals stateFromMeanElements(…).r`, () => {
+      const out = vec3(0, 0, 0);
+      for (const t of [0, 1e5, -3e8, 2e9]) {
+        expectVecClose(meanPositionInto(m, t, out), stateFromMeanElements(m, t).r, 1e-8 * m.a);
+      }
+    });
+  }
+
+  for (const name of ['plain', 'plane', 'negativeN']) {
+    it(`${name}: the normal is r × v, normalised`, () => {
+      const m = cases[name]!;
+      for (const t of [0, 7e6]) {
+        const s = stateFromMeanElements(m, t);
+        const h = angularMomentum(s);
+        expectVecClose(meanOrbitNormal(m, t), scale(h, 1 / norm(h)), 1e-12);
+      }
+    });
+  }
 });

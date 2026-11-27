@@ -15,7 +15,7 @@ import { G, wrapTwoPi } from '../math/units';
 import type { Vec3 } from '../math/vec3';
 import type { MeanElements, ReferencePlane, StateVector } from '../orbital/elements';
 import { addState, planePole, subState } from '../orbital/frames';
-import { stateFromMeanElements } from '../orbital/propagate';
+import { meanPositionInto, stateFromMeanElements } from '../orbital/propagate';
 import { laplaceSoiRadius } from '../orbital/soi';
 
 export type BodyId = string; // 'sun', 'earth', 'moon', …
@@ -306,6 +306,74 @@ export function changeFrame(
 ): StateVector {
   if (fromId === toId) return { r: { ...s.r }, v: { ...s.v } };
   return addState(s, bodyStateIn(sys, fromId, toId, t));
+}
+
+// ---- Per-frame positions -------------------------------------------------------------------
+
+/**
+ * Every body, parents before children (depth first from the root), children by semi-major
+ * axis. The index order of per-frame buffers.
+ */
+export function bodyOrder(sys: BodySystem): BodyId[] {
+  const out: BodyId[] = [];
+  const visit = (id: BodyId) => {
+    out.push(id);
+    for (const c of getBody(sys, id).childIds) visit(c);
+  };
+  visit(sys.rootId);
+  return out;
+}
+
+/** Parent index per entry of an order (−1 for the root), computed once per order array. */
+const parentIndexCache = new WeakMap<readonly BodyId[], Int32Array>();
+
+function parentIndices(sys: BodySystem, order: readonly BodyId[]): Int32Array {
+  const cached = parentIndexCache.get(order);
+  if (cached) return cached;
+  const indexOf = new Map(order.map((id, i) => [id, i]));
+  const parents = new Int32Array(order.length);
+  order.forEach((id, i) => {
+    const parentId = getBody(sys, id).parentId;
+    const p = parentId === null ? -1 : (indexOf.get(parentId) ?? -1);
+    if (parentId !== null && !(p >= 0 && p < i)) {
+      throw new Error(`bodyWorldPositionsInto: ${parentId} must come before ${id} in the order`);
+    }
+    parents[i] = p;
+  });
+  parentIndexCache.set(order, parents);
+  return parents;
+}
+
+const scratchPosition: Vec3 = { x: 0, y: 0, z: 0 };
+
+/**
+ * World positions of every body at t, 3 floats per body in `order`, into out. Each body's local
+ * position is computed once and added to its parent's, so this is one Kepler solve per body and
+ * no allocation after the first call with a given order array (which must list parents before
+ * children, as `bodyOrder` does). Matches `bodyWorldState(…).r` up to rounding.
+ */
+export function bodyWorldPositionsInto(
+  sys: BodySystem,
+  order: readonly BodyId[],
+  t: number,
+  out: Float64Array,
+): Float64Array {
+  const parents = parentIndices(sys, order);
+  for (let i = 0; i < order.length; i++) {
+    const b = getBody(sys, order[i]!);
+    const p = parents[i]!;
+    if (!b.orbit || p < 0) {
+      out[3 * i] = 0;
+      out[3 * i + 1] = 0;
+      out[3 * i + 2] = 0;
+      continue;
+    }
+    const r = meanPositionInto(b.orbit, t, scratchPosition);
+    out[3 * i] = out[3 * p]! + r.x;
+    out[3 * i + 1] = out[3 * p + 1]! + r.y;
+    out[3 * i + 2] = out[3 * p + 2]! + r.z;
+  }
+  return out;
 }
 
 // ---- Rotation -------------------------------------------------------------------------------
