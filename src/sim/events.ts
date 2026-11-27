@@ -8,7 +8,8 @@
  */
 
 import { createPQueue, push, removeWhere } from '../math/pqueue';
-import type { ShipId } from './ship';
+import type { NodeId } from './maneuver';
+import { shipStats, type ShipId } from './ship';
 import {
   assertNever,
   computeTrajectory,
@@ -21,7 +22,8 @@ import type { World } from './world';
 export type SimEvent =
   | { type: 'soi-change'; shipId: ShipId; trajectoryVersion: number }
   | { type: 'impact'; shipId: ShipId; trajectoryVersion: number }
-  | { type: 'trajectory-horizon'; shipId: ShipId; trajectoryVersion: number };
+  | { type: 'trajectory-horizon'; shipId: ShipId; trajectoryVersion: number }
+  | { type: 'node'; shipId: ShipId; nodeId: NodeId; trajectoryVersion: number };
 export type SimEventType = SimEvent['type'];
 
 export interface EventOutcome {
@@ -71,6 +73,8 @@ function eventTypeFor(end: SegmentEnd): SimEventType {
       return 'impact';
     case 'horizon':
       return 'trajectory-horizon';
+    case 'maneuver':
+      return 'node';
     default:
       return assertNever(end);
   }
@@ -89,11 +93,15 @@ export function queueShipEvent(world: World, shipId: ShipId): void {
   const traj = trajectories[shipId];
   const seg = traj?.segments[0];
   if (!ship || ship.status !== 'coasting' || !traj || !seg) return;
-  push(events, seg.tEnd, {
-    type: eventTypeFor(seg.endEvent),
-    shipId,
-    trajectoryVersion: traj.version,
-  });
+  const type = eventTypeFor(seg.endEvent);
+  const trajectoryVersion = traj.version;
+  push(
+    events,
+    seg.tEnd,
+    type === 'node'
+      ? { type, shipId, nodeId: seg.endNodeId ?? '', trajectoryVersion }
+      : { type, shipId, trajectoryVersion },
+  );
 }
 
 /** Recomputes one ship's trajectory from its orbit, bumps its version, and re-queues its event. */
@@ -102,7 +110,13 @@ export function refreshShipDerived(world: World, shipId: ShipId): void {
   if (!ship) throw new Error(`Unknown ship: ${shipId}`);
   const old = world.derived.trajectories[shipId];
   world.derived.trajectories[shipId] = {
-    segments: ship.status === 'coasting' ? computeTrajectory(world.system, ship.orbit) : [],
+    segments:
+      ship.status === 'coasting'
+        ? computeTrajectory(world.system, ship.orbit, {
+            plan: ship.plan,
+            dvAvailable: shipStats(ship).dv,
+          })
+        : [],
     version: (old?.version ?? 0) + 1,
   };
   queueShipEvent(world, shipId);

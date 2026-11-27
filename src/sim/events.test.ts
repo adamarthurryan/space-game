@@ -17,7 +17,7 @@ const system = buildBodySystem(2_451_545, [
   },
 ]);
 
-const ev = (shipId: string, type: SimEvent['type'] = 'soi-change'): SimEvent => ({
+const ev = (shipId: string, type: Exclude<SimEvent['type'], 'node'> = 'soi-change'): SimEvent => ({
   type,
   shipId,
   trajectoryVersion: 1,
