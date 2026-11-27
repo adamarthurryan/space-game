@@ -3,14 +3,15 @@
  *
  * Plain data, mutated in place once per frame by `advanceClock`. Warp steps are powers of ten,
  * ×1 … ×10⁷. Wall time per frame is clamped to `MAX_FRAME_DT`, so a frame after a stall jumps at
- * most `MAX_FRAME_DT × warp`. Sprint 3 adds clamping at the next sim event.
+ * most `MAX_FRAME_DT × warp`. Clamping at sim events is `advanceWorld`'s (sim/world.ts), which
+ * aims for `clockTarget` and stops at each event on the way.
  */
 
 export const WARP_STEPS = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7] as const;
 /** Seconds of wall time per frame, at most (S2-3). */
 export const MAX_FRAME_DT = 0.25;
 
-/** Plain data. Sprint 3 adds the next-event clamp. */
+/** Plain data. */
 export interface Clock {
   /** Sim seconds from the epoch. */
   t: number;
@@ -32,6 +33,11 @@ export function warpStep(c: Clock): number {
 /** Sim seconds per wall second: 0 when paused. */
 export function warpRate(c: Clock): number {
   return c.paused ? 0 : warpStep(c);
+}
+
+/** The time this frame aims for: t + min(dtWall, MAX_FRAME_DT) × warp (S2-3); t when paused. */
+export function clockTarget(c: Clock, dtWall: number): number {
+  return c.t + Math.min(Math.max(dtWall, 0), MAX_FRAME_DT) * warpRate(c);
 }
 
 /** `t += min(dtWall, MAX_FRAME_DT) × warp`, unless paused. Mutates c. Returns the sim time advanced. */

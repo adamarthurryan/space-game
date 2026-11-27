@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../../gen/scenario';
 import { getBody } from '../../sim/body';
-import { framingDistance, MAX_DISTANCE, minDistance } from './framing';
+import {
+  framingDistance,
+  framingDistanceOf,
+  MAX_DISTANCE,
+  minDistance,
+  minDistanceOf,
+  SHIP_MIN_DISTANCE,
+  shipFramingDistance,
+} from './framing';
 
 const sys = createSandboxWorld().system;
 const apo = (id: string) => {
@@ -36,5 +44,27 @@ describe('framing', () => {
 
   it('the minimum distance is 1.05 × the radius', () => {
     expect(minDistance(sys, 'earth')).toBeCloseTo(1.05 * 6371.0084, 6);
+  });
+});
+
+describe('ship framing', () => {
+  const world = createSandboxWorld();
+
+  it('frames a ship at 2.5 × its distance from its parent, capped at the parent framing', () => {
+    expect(shipFramingDistance(7000, 1e6)).toBe(17_500);
+    expect(shipFramingDistance(1e6, 1.2e6)).toBe(1.2e6);
+    expect(shipFramingDistance(0, 1e6)).toBe(SHIP_MIN_DISTANCE);
+    const kestrel = { kind: 'ship', id: 'ship-1' } as const;
+    expect(framingDistanceOf(world, kestrel)).toBeCloseTo(
+      2.5 * (getBody(sys, 'earth').radius + 400),
+      6,
+    );
+    expect(minDistanceOf(world, kestrel)).toBe(0.05);
+  });
+
+  it('frames bodies as before', () => {
+    const mars = { kind: 'body', id: 'mars' } as const;
+    expect(framingDistanceOf(world, mars)).toBe(framingDistance(sys, 'mars'));
+    expect(minDistanceOf(world, mars)).toBe(minDistance(sys, 'mars'));
   });
 });

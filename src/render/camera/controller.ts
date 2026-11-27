@@ -1,6 +1,7 @@
 /**
  * The camera controller (decisions S2-10 to S2-12 in planning/sprint-2.md). Pure TypeScript, no
- * three.js, so it's tested headlessly; `CameraRig.tsx` feeds it input and applies it each frame.
+ * three.js, so it's tested headlessly; `input/cameraInput.ts` feeds it input and
+ * `CameraStage.ts` applies it each frame.
  *
  * The camera orbits the scene origin at yaw and pitch about a reference pole, at a distance kept
  * as log10(km). Its orientation is built from the pole's basis, not with `lookAt`, so looking
@@ -8,7 +9,7 @@
  */
 
 import { cross, dot, normalize, vec3, type Vec3 } from '../../math/vec3';
-import type { BodyId } from '../../sim/body';
+import type { MapObjectRef } from '../../store/useView';
 import { MAX_DISTANCE } from './framing';
 
 /** One wheel notch zooms by ×2 (S2-10). */
@@ -35,7 +36,8 @@ export function wheelNotches(e: { deltaY: number; deltaMode: number }): number {
 }
 
 export interface CameraController {
-  focusId: BodyId;
+  /** The body or ship the camera orbits (S3-15). */
+  focus: MapObjectRef;
   /** Reference pole, unit, ecliptic axes (S2-12). */
   pole: Vec3;
   /** About the pole, from the pole basis's u axis. */
@@ -45,7 +47,12 @@ export interface CameraController {
   /** log10 km. */
   logDistance: number;
   target: { yaw: number; pitch: number; logDistance: number };
-  refocus: { fromId: BodyId; elapsed: number; duration: number; fromLogDistance: number } | null;
+  refocus: {
+    from: MapObjectRef;
+    elapsed: number;
+    duration: number;
+    fromLogDistance: number;
+  } | null;
   snap: { fromPole: Vec3; fromPitch: number; elapsed: number; duration: number } | null;
   limits: { minLogDistance: number; maxLogDistance: number };
 }
@@ -71,7 +78,7 @@ export function poleBasis(pole: Vec3): { u: Vec3; v: Vec3; w: Vec3 } {
 }
 
 export function createController(
-  focusId: BodyId,
+  focus: MapObjectRef,
   framing: number,
   minDist: number,
 ): CameraController {
@@ -81,7 +88,7 @@ export function createController(
   const yaw = -HALF_PI;
   const pitch = Math.PI / 6;
   return {
-    focusId,
+    focus,
     pole: vec3(0, 0, 1),
     yaw,
     pitch,
@@ -111,22 +118,22 @@ export function orbitBy(c: CameraController, dxPx: number, dyPx: number): void {
   c.target.pitch = c.pitch;
 }
 
-/** Starts a refocus on `toId` (S2-11), moving to its framing distance. */
+/** Starts a refocus on `to` (S2-11), moving to its framing distance. */
 export function beginRefocus(
   c: CameraController,
-  toId: BodyId,
+  to: MapObjectRef,
   framing: number,
   minDist: number,
 ): void {
   // A refocus mid-refocus starts from where the origin is now only approximately; it restarts
   // from the old target. Good enough for a camera.
   c.refocus = {
-    fromId: c.focusId,
+    from: c.focus,
     elapsed: 0,
     duration: REFOCUS_DURATION,
     fromLogDistance: c.logDistance,
   };
-  c.focusId = toId;
+  c.focus = to;
   c.limits.minLogDistance = Math.log10(minDist);
   c.target.logDistance = clamp(
     Math.log10(framing),
@@ -187,18 +194,18 @@ export function stepController(c: CameraController, dtWall: number): void {
 /**
  * The scene origin, written into `out`: the focus, or the eased blend of the old and new focus
  * during a refocus. `focusWorld(id, out)` writes a body's world position at the current t, and
- * is called with two different output vectors. At the end of a refocus the origin is exactly
+ * is called with two different output vectors. The focus may be a body or a ship. At the end of a refocus the origin is exactly
  * the new focus.
  */
 export function controllerOriginInto(
   c: CameraController,
-  focusWorld: (id: BodyId, out: Vec3) => Vec3,
+  focusWorld: (ref: MapObjectRef, out: Vec3) => Vec3,
   out: Vec3,
 ): Vec3 {
-  focusWorld(c.focusId, out);
+  focusWorld(c.focus, out);
   if (!c.refocus) return out;
   const k = easeInOut(c.refocus.elapsed / c.refocus.duration);
-  const from = focusWorld(c.refocus.fromId, scratchFrom);
+  const from = focusWorld(c.refocus.from, scratchFrom);
   out.x = from.x + (out.x - from.x) * k;
   out.y = from.y + (out.y - from.y) * k;
   out.z = from.z + (out.z - from.z) * k;

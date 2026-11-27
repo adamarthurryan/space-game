@@ -68,6 +68,8 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 - A sandbox scenario: a few ships in Earth and lunar orbits, and a "spawn ship" debug action (design, parent body, orbit).
 - `render/layers/TrajectoryLayer.ts` (a plain three.js layer, like the orbit lines): segments drawn in the focus body's frame, colour per ship, SOI transition markers, Pe/Ap markers.
 
+- **Outcome:** done; see the implementation notes in [sprint-3.md](sprint-3.md#implementation-notes) and decisions 91–113.
+
 **Done when:** `render/` has no React Three Fiber (no `@react-three/*` dependency) and the sprint 2 tests and smoke checks pass unchanged after the switch; a ship spawned on an Earth-escape orbit shows a trajectory that crosses into the Sun's frame correctly, a ship aimed at the Moon shows the SOI entry and the lunar flyby, and an impact ends the trajectory. A misspelt resource ID in content fails type checking, and a duplicate module ID fails the content test.
 
 ## Sprint 4 — Maneuver nodes

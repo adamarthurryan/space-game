@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 import type { BodyId } from '../sim/body';
+import type { ShipId } from '../sim/ship';
 
-/** Something on the map that can be selected, hovered or focused. Sprint 3 adds ships. */
-export type MapObjectRef = { kind: 'body'; id: BodyId };
+/** Something on the map that can be selected, hovered or focused (S3-15). */
+export type MapObjectRef = { kind: 'body'; id: BodyId } | { kind: 'ship'; id: ShipId };
+
+/** Whether two refs name the same object. */
+export const sameRef = (a: MapObjectRef | null, b: MapObjectRef | null): boolean =>
+  a === b || (a !== null && b !== null && a.kind === b.kind && a.id === b.id);
 
 /** Planes the camera can snap to (S2-12). */
 export type SnapPlane = 'ecliptic' | 'selected-orbit';
@@ -25,6 +30,8 @@ interface ViewState {
   snapRequest: { plane: SnapPlane; seq: number } | null;
   /** System tab tree state. */
   expanded: Record<BodyId, boolean>;
+  /** Whether the Fleets tab shows the spawn form (S3-14). */
+  spawnFormOpen: boolean;
   toggleLeftPanel(): void;
   toggleRightPanel(): void;
   setLeftTab(tab: LeftTab): void;
@@ -34,6 +41,7 @@ interface ViewState {
   focusOn(ref: MapObjectRef): void;
   snapTo(plane: SnapPlane): void;
   toggleExpanded(id: BodyId): void;
+  setSpawnFormOpen(open: boolean): void;
   setExpanded(id: BodyId, expanded: boolean): void;
   /** Expands every listed body (no change, and no update, if all are expanded). */
   expand(ids: readonly BodyId[]): void;
@@ -53,6 +61,7 @@ export const useView = create<ViewState>()((set) => ({
   focusSeq: 0,
   snapRequest: null,
   expanded: { sun: true },
+  spawnFormOpen: false,
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftTab: (tab) => set({ leftTab: tab }),
@@ -60,6 +69,7 @@ export const useView = create<ViewState>()((set) => ({
   setHovered: (ref) => set({ hovered: ref }),
   focusOn: (ref) => set((s) => ({ focus: ref, selected: ref, focusSeq: s.focusSeq + 1 })),
   snapTo: (plane) => set((s) => ({ snapRequest: { plane, seq: (s.snapRequest?.seq ?? 0) + 1 } })),
+  setSpawnFormOpen: (open) => set({ spawnFormOpen: open }),
   toggleExpanded: (id) => set((s) => ({ expanded: { ...s.expanded, [id]: !s.expanded[id] } })),
   setExpanded: (id, value) => set((s) => ({ expanded: { ...s.expanded, [id]: value } })),
   expand: (ids) =>

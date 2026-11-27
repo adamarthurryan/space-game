@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../gen/scenario';
-import { norm, sub, vec3 } from '../math/vec3';
+import { add, norm, sub, vec3 } from '../math/vec3';
 import { bodyWorldState } from '../sim/body';
-import { createMapFrame, frameWorldInto, STAGE, updateFrameBodies } from './mapFrame';
+import { shipStateAt } from '../sim/ship';
+import {
+  createMapFrame,
+  frameBodyOf,
+  frameWorldInto,
+  mapObjectWorldInto,
+  syncFrameShips,
+  updateFrameBodies,
+  updateFrameShips,
+} from './mapFrame';
 
 describe('MapFrame', () => {
   const { system } = createSandboxWorld();
@@ -35,17 +44,44 @@ describe('MapFrame', () => {
     const p = frameWorldInto(f, i, vec3(0, 0, 0));
     expect(norm(sub(p, bodyWorldState(system, 'moon', t).r))).toBeLessThan(1e-6);
   });
+});
 
-  it('orders the stages clock < bodies < camera < projection < layers < labels, all ≤ 0', () => {
-    const p = [
-      STAGE.clock,
-      STAGE.bodies,
-      STAGE.camera,
-      STAGE.projection,
-      STAGE.layers,
-      STAGE.labels,
-    ];
-    expect([...p].sort((a, b) => a - b)).toEqual(p);
-    expect(Math.max(...p)).toBeLessThanOrEqual(0);
+describe('MapFrame ships', () => {
+  it('allocates the drawn ships in seq order, and reallocates only when the set changes', () => {
+    const world = createSandboxWorld();
+    const f = createMapFrame(world.system);
+    expect(syncFrameShips(f, world)).toBe(true);
+    expect(f.ships.ids).toEqual(['ship-1', 'ship-2', 'ship-3']);
+    const arrays = f.ships;
+    expect(syncFrameShips(f, world)).toBe(false);
+    expect(f.ships).toBe(arrays);
+    world.ships['ship-2']!.status = 'destroyed';
+    expect(syncFrameShips(f, world)).toBe(true);
+    expect(f.ships.ids).toEqual(['ship-1', 'ship-3']);
+    expect(f.ships.world).toHaveLength(6);
+  });
+
+  it('the ships stage writes parent + ship state at t', () => {
+    const world = createSandboxWorld();
+    const f = createMapFrame(world.system);
+    const t = 5000;
+    updateFrameBodies(f, world.system, t);
+    syncFrameShips(f, world);
+    updateFrameShips(f, world);
+    const k = f.ships.indexOf['ship-3']!;
+    const heron = world.ships['ship-3']!;
+    expect(f.ships.parentIndex[k]).toBe(f.indexOf['moon']);
+    const want = add(
+      bodyWorldState(world.system, 'moon', t).r,
+      shipStateAt(world.system, heron, t).r,
+    );
+    const got = mapObjectWorldInto(f, world, { kind: 'ship', id: 'ship-3' }, vec3(0, 0, 0));
+    expect(norm(sub(got, want))).toBeLessThan(1e-6);
+  });
+
+  it('frames trajectories on the focus body, or a focused ship parent', () => {
+    const world = createSandboxWorld();
+    expect(frameBodyOf(world, { kind: 'body', id: 'mars' })).toBe('mars');
+    expect(frameBodyOf(world, { kind: 'ship', id: 'ship-3' })).toBe('moon');
   });
 });

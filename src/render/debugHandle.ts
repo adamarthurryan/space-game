@@ -8,11 +8,15 @@ import { meanOrbitNormal } from '../orbital/propagate';
 import { useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { controllerPose, type CameraController } from './camera/controller';
+import type { TrajectoryLayer } from './layers/TrajectoryLayer';
 import type { MapFrame } from './mapFrame';
+import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 
 interface DebugSources {
   frame?: MapFrame;
   controller?: CameraController;
+  trajectories?: TrajectoryLayer;
+  markers?: TrajectoryMarkerRegistry;
 }
 
 const sources: DebugSources = {};
@@ -29,7 +33,8 @@ function createProbes() {
       if (!c) throw new Error('no camera yet');
       const pose = controllerPose(c);
       return {
-        focusId: c.focusId,
+        focusId: c.focus.id,
+        focusKind: c.focus.kind,
         yaw: c.yaw,
         pitch: c.pitch,
         distance: 10 ** c.logDistance,
@@ -57,7 +62,53 @@ function createProbes() {
     },
     /** The labels placed this frame. */
     labels() {
-      return frame().labels.map((l) => ({ id: l.ref.id, ...l.rect }));
+      return frame().labels.map((l) => ({ id: l.ref.id, kind: l.ref.kind, ...l.rect }));
+    },
+    /** A drawn ship's projection (S3-22); null if it isn't drawn (destroyed). */
+    ship(id: string) {
+      const fs = frame().ships;
+      const k = fs.indexOf[id];
+      if (k === undefined) return null;
+      return {
+        x: fs.screenX[k]!,
+        y: fs.screenY[k]!,
+        depth: fs.depth[k]!,
+        marker: fs.markerShown[k] === 1,
+        merged: fs.merged[k] === 1,
+      };
+    },
+    /** A ship's trajectory segments and status (S3-22). */
+    trajectory(id: string) {
+      const world = useWorld.getState().world;
+      const ship = world.ships[id];
+      if (!ship) throw new Error(`unknown ship ${id}`);
+      const traj = world.derived.trajectories[id];
+      return {
+        status: ship.status,
+        segments: (traj?.segments ?? []).map((s) => ({
+          parentId: s.parentId,
+          tStart: s.tStart,
+          tEnd: s.tEnd,
+          endEvent: s.endEvent,
+          endTargetId: s.endTargetId ?? null,
+        })),
+      };
+    },
+    /** The vertices drawn per segment of a ship's trajectory this frame. */
+    trajectoryVertices(id: string) {
+      return sources.trajectories?.vertexCounts.get(id) ?? [];
+    },
+    /** The trajectory markers placed this frame. */
+    trajectoryMarkers() {
+      return sources.markers?.placed ?? [];
+    },
+    /** Every ship's ID, name and status. */
+    ships() {
+      return Object.values(useWorld.getState().world.ships).map((s) => ({
+        id: s.id,
+        name: s.name,
+        status: s.status,
+      }));
     },
     /** A body's orbit normal at the current sim time. */
     orbitNormal(id: string) {

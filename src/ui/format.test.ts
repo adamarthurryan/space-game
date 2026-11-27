@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { calendarFromJd } from '../math/time';
 import {
   formatAngle,
+  formatCountdown,
   formatDate,
   formatDistance,
   formatDuration,
@@ -87,5 +88,16 @@ describe('formatAngle and formatMass', () => {
     expect(formatMass(1.0659e16)).toBe('1.066 × 10¹⁶ kg');
     expect(formatMass(9.9996e19)).toBe('1.000 × 10²⁰ kg');
     expect(formatScientific(2.5e-3, 'm')).toBe('2.500 × 10⁻³ m');
+  });
+});
+
+describe('formatCountdown', () => {
+  it('shows the two leading units', () => {
+    expect(formatCountdown(42.7)).toBe('42 s');
+    expect(formatCountdown(41 * 60 + 30)).toBe('41 min');
+    expect(formatCountdown(5 * 3600 + 12 * 60)).toBe('5 h 12 min');
+    expect(formatCountdown(2 * 86_400 + 22 * 3600 + 5)).toBe('2 d 22 h');
+    expect(formatCountdown(2 * 365.25 * 86_400)).toBe('2.000 yr');
+    expect(formatCountdown(-5)).toBe('0 s');
   });
 });

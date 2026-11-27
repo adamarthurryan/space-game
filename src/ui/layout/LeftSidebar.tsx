@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { useView, type LeftTab } from '../../store/useView';
+import { FleetList } from '../panels/FleetList';
 import { SystemTree } from '../panels/SystemTree';
 import styles from './LeftSidebar.module.css';
 
@@ -59,6 +60,8 @@ export function LeftSidebar() {
       >
         {active.id === 'system' ? (
           <SystemTree />
+        ) : active.id === 'fleets' ? (
+          <FleetList />
         ) : (
           <p className={styles['empty']}>{active.empty}</p>
         )}

@@ -540,7 +540,21 @@ Sprint 3 is done when all of these hold:
 
 ## Implementation notes
 
-Choices made while building go here, as in sprint 2.
+Choices made while building, beyond the decisions above. They are logged in [decisions.md](../docs/decisions.md) with decisions 91–113.
+
+1. **Step 1 gate.** The sprint 2 unit tests, `shell.mjs` and `map.mjs` passed after the switch with one change: `mapFrame.test.ts`'s check of the `STAGE` priorities moved to `stages.test.ts` as a check of `STAGES`, since `STAGE` no longer exists. three.js is 0.187. The renderer keeps R3F's defaults that affect the look: ACES filmic tone mapping and a pixel ratio capped at 2.
+2. **Renderer signature.** `MapRenderer` takes `(container, frame, labels, markers)`: `Scene` owns the `MapFrame` (created per body system) because the label overlay needs its body order. A new system gives a new renderer. `FrameCamera` gained `pixelRatio`, which the marker layer reads.
+3. **Content.** A backbone's own volume doesn't count against its limit; every module's volume is positive. The Starship stats check (S3-23) is in `sim/ship.test.ts`, because content tests may not import `sim/`. Starship comes out at 1,800.6 t wet, 365 s, 7.84 km/s and 8.6 m/s².
+4. **Event search details.** `timeToRadius` works from the true anomaly measured from periapsis, also for near-circular orbits, where `elementsFromState` reports the argument of latitude. The 1 s rule clamps an exit after an entry; the child just left can't be re-entered at once because `findSphereEntry` only reports crossings from > 0 to ≤ 0. The impact tests check `|r| = radius + atmosphereHeight` (S3-8), not the bare radius.
+5. **Horizon after a re-base.** The 10-year cap counts from the re-based start, so after an SOI change a trailing horizon segment ends later than before. The world test compares the re-based segment with the old segment 1 apart from that end time.
+6. **No import cycle.** `refreshShipDerived` and `emptyDerived` live in `sim/events.ts`, and `sim/world.ts` imports them, so `events.ts` needs only types from `world.ts`.
+7. **To the Moon.** An angular lead of the apoapsis barely changes the lunar periapsis, because the approach relative to the Moon is nearly radial. The preset offsets the apoapsis radius instead, scanning ±20,000 km in 500 km steps for the lunar periapsis nearest 1,000 km (about 70 ms). Its flyby leaves the Moon's SOI and then Earth's: a slingshot to the Sun.
+8. **Tern** starts at Ω = 40°, so it isn't drawn on top of Kestrel (both start at the node, at periapsis).
+9. **Trajectory pieces.** Each segment has two `THREE.Line`s, the first revolution (or the whole open conic) and the faded last revolution, rebuilt only when the trajectory's version changes. Lines take their colour from the material (colour and opacity), as each has one colour. In the parent's own frame, the last revolution runs from the last time the ship is at its current anomaly to the event.
+10. **Markers.** `trajectoryMarkers` takes the ship ID, since a `Trajectory` doesn't carry it. Marker texts are placed after the labels and hidden where they would overlap one, rather than going through `declutter` (they aren't pickable). Markers more than 50 px off screen aren't placed.
+11. **Projection with the view.** `projectFrame` takes the focus and selection as an optional argument, for the merge exemption of focused and selected ships; the sprint 2 projection tests call it without.
+12. **Test helpers.** `sim/testSystem.ts` (the synthetic star–planet–moon system with the moon in the planet's xy plane) and `ui/panels/testStores.ts` (store resets) are test-only modules in `src/`.
+13. **Smoke check 6.** A focused ship on the far side of its parent is hidden by the parent's disc, because a refocus keeps the camera's direction. `ships.mjs` snaps to Kestrel's orbit (P) and zooms out two notches before hovering it, so the ship and both of its apsides are on screen. Whether focusing a ship should choose a better viewpoint is open question 9.
 
 ## Questions settled before the sprint
 

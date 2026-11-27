@@ -84,3 +84,16 @@ export function formatScientific(x: number, unit: string): string {
 export function formatMass(kg: number): string {
   return formatScientific(kg, 'kg');
 }
+
+/**
+ * A time until an event, to the two leading units: `42 s`, `41 min`, `5 h 12 min`, `2 d 22 h`,
+ * `1.881 yr`.
+ */
+export function formatCountdown(s: number): string {
+  const a = Math.max(s, 0);
+  if (a < 60) return `${Math.floor(a)} s`;
+  if (a < 3600) return `${Math.floor(a / 60)} min`;
+  if (a < DAY) return `${Math.floor(a / 3600)} h ${Math.floor((a % 3600) / 60)} min`;
+  if (a < YEAR) return `${Math.floor(a / DAY)} d ${Math.floor((a % DAY) / 3600)} h`;
+  return `${(a / YEAR).toFixed(3)} yr`;
+}

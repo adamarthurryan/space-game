@@ -11,7 +11,7 @@ description: Launch the space game in a browser and check that it works. Use whe
 npm run smoke
 ```
 
-It runs `test/smoke/shell.mjs`, then `test/smoke/map.mjs`. Each starts Vite on port 5199
+It runs `test/smoke/shell.mjs`, then `test/smoke/map.mjs`, then `test/smoke/ships.mjs`. Each starts Vite on port 5199
 (`SMOKE_PORT` to change it), drives the installed Google Chrome headless through
 `playwright-core`, prints a PASS/FAIL line per check, and exits non-zero on any failure. The
 shared server, browser and console watch are in `test/smoke/lib.mjs`; it always stops the server
@@ -22,6 +22,10 @@ it started.
 - `map.mjs` checks the map (sprint 2's acceptance criteria): the System tab, selection and
   refocus, Jupiter's moons labelled and apart, the E and P snaps, zooming out 21 notches from low
   Earth orbit, no jitter at ×10⁵, a year at ×10⁷, and picking Mars by its label.
+- `ships.mjs` checks ships and trajectories (sprint 3's acceptance criteria): the sandbox ships
+  in the Fleets tab, spawning Earth escape, To the Moon and Suborbital through the form, the
+  re-base into the Sun's frame at ×10⁶, the lunar segment and its SOI marker at Moon focus, an
+  impact destroying a ship, no jitter at a ship focus, and picking Kestrel's marker.
 - Both fail on any console error, warning or failed request, except SwiftShader's "GPU stall due
   to ReadPixels" message, which the screenshots themselves cause.
 
@@ -29,7 +33,8 @@ Screenshots are written to `test/smoke/out/` (git-ignored): read them to look at
 
 `map.mjs` reads the dev-only debug handle `window.__spaceGame` (`src/render/debugHandle.ts`):
 `camera()`, `body(id)` (screen position, disc, depth), `labels()`, `orbitNormal(id)`,
-`simTime()`, and the `view` and `world` stores. Use it from your own Playwright scripts too.
+`simTime()`, `ship(id)`, `ships()`, `trajectory(id)`, `trajectoryVertices(id)`,
+`trajectoryMarkers()`, and the `view` and `world` stores. Use it from your own Playwright scripts too.
 
 When a sprint adds something visible, add its checks to the smoke file for that area (or a new
 file using `lib.mjs`, added to the `smoke` script) rather than writing a separate driver.

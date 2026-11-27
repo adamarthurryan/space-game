@@ -1,0 +1,39 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The root sits at the marker point; the glyph is centred on it, the text to its right. */
+.marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.glyph {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  font-size: 9px;
+  line-height: 9px;
+  color: var(--color-text);
+}
+
+.text {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  transform: translateY(-50%);
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
