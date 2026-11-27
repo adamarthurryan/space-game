@@ -130,6 +130,24 @@ const cases: Case[] = [
     target: '../math/roots',
     expected: [],
   },
+  // Sprint 2 (planning/sprint-2.md, "Lint rules"). The render and ui cases come with their targets.
+  {
+    file: 'src/sim/bad.ts',
+    code: "import { useWorld } from '../store/useWorld';\nexport const x = useWorld;\n",
+    target: '../store/useWorld',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/sim/bad.ts',
+    code: 'export const x = performance.now();\n',
+    expected: [RESTRICTED_PROPERTY],
+  },
+  {
+    file: 'src/store/ok.ts',
+    code: "import { createSandboxWorld } from '../gen/scenario';\nexport const x = createSandboxWorld;\n",
+    target: '../gen/scenario',
+    expected: [],
+  },
   {
     file: 'src/misc/bad.ts',
     code: 'export const x = 1;\n',

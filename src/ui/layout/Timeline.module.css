@@ -42,3 +42,7 @@
   border: 1px solid var(--color-border);
   border-radius: 2px;
 }
+
+.paused {
+  text-decoration: line-through;
+}

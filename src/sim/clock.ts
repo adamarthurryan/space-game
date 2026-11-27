@@ -1,0 +1,62 @@
+/**
+ * The sim clock (decisions S2-2 and S2-3 in planning/sprint-2.md).
+ *
+ * Plain data, mutated in place once per frame by `advanceClock`. Warp steps are powers of ten,
+ * ×1 … ×10⁷. Wall time per frame is clamped to `MAX_FRAME_DT`, so a frame after a stall jumps at
+ * most `MAX_FRAME_DT × warp`. Sprint 3 adds clamping at the next sim event.
+ */
+
+export const WARP_STEPS = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7] as const;
+/** Seconds of wall time per frame, at most (S2-3). */
+export const MAX_FRAME_DT = 0.25;
+
+/** Plain data. Sprint 3 adds the next-event clamp. */
+export interface Clock {
+  /** Sim seconds from the epoch. */
+  t: number;
+  /** Index into WARP_STEPS. */
+  warpIndex: number;
+  paused: boolean;
+}
+
+/** A running clock at ×1. */
+export function createClock(t = 0): Clock {
+  return { t, warpIndex: 0, paused: false };
+}
+
+/** The current warp step, whether paused or not. */
+export function warpStep(c: Clock): number {
+  return WARP_STEPS[c.warpIndex] ?? 1;
+}
+
+/** Sim seconds per wall second: 0 when paused. */
+export function warpRate(c: Clock): number {
+  return c.paused ? 0 : warpStep(c);
+}
+
+/** `t += min(dtWall, MAX_FRAME_DT) × warp`, unless paused. Mutates c. Returns the sim time advanced. */
+export function advanceClock(c: Clock, dtWall: number): number {
+  const dt = Math.min(Math.max(dtWall, 0), MAX_FRAME_DT) * warpRate(c);
+  c.t += dt;
+  return dt;
+}
+
+/** Sets the warp step, clamped to the valid indices. */
+export function setWarpIndex(c: Clock, i: number): void {
+  c.warpIndex = Math.min(Math.max(Math.round(i), 0), WARP_STEPS.length - 1);
+}
+
+/** One step faster; stops at ×10⁷. */
+export function warpUp(c: Clock): void {
+  setWarpIndex(c, c.warpIndex + 1);
+}
+
+/** One step slower; stops at ×1 and does not pause. */
+export function warpDown(c: Clock): void {
+  setWarpIndex(c, c.warpIndex - 1);
+}
+
+/** Pausing keeps the warp step. */
+export function setPaused(c: Clock, paused: boolean): void {
+  c.paused = paused;
+}
