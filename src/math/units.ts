@@ -53,6 +53,9 @@ export function wrapTwoPi(angle: number): number {
 
 /** Wraps an angle to (−π, π]. */
 export function wrapPi(angle: number): number {
+  // Angles already in range are returned as they are: going through [0, 2π) would round a
+  // tiny negative angle to a multiple of 2π's ulp (8.9e-16).
+  if (angle > -Math.PI && angle <= Math.PI) return angle + 0;
   const r = wrapTwoPi(angle);
   return r > Math.PI ? r - TWO_PI : r;
 }

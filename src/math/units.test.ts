@@ -104,4 +104,11 @@ describe('angles', () => {
     expect(wrapPi(-0.1)).toBeCloseTo(-0.1, 15);
     expect(wrapPi(3 * Math.PI)).toBeCloseTo(Math.PI, 13);
   });
+
+  it('wrapPi returns in-range angles unchanged, keeping tiny negatives exact', () => {
+    expect(wrapPi(-1.3355078189823352e-15)).toBe(-1.3355078189823352e-15);
+    expect(wrapPi(-1e-300)).toBe(-1e-300);
+    expect(wrapPi(2.5)).toBe(2.5);
+    expect(Object.is(wrapPi(-0), 0)).toBe(true);
+  });
 });
