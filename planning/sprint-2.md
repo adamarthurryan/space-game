@@ -503,7 +503,7 @@ Done at the end of the sprint, as decision 53 asks: how much of `render/` uses J
 - Sprint 4's node gizmo was the one planned use of R3F pointer events (architecture.md). With plain three.js it uses a `Raycaster` against the handle meshes from the existing pointer listeners, which is about the same amount of code.
 - Estimated size: about 400 lines changed in `render/`, no changes outside it, and the smoke tests unchanged as the check.
 
-The decision is the user's: the alternative is to keep R3F as a host, which works and costs nothing now, at the price of the friction above as layers are added.
+**Outcome:** agreed. The switch is the first task of sprint 3, as planned in [milestone-1-sprints.md](milestone-1-sprints.md#sprint-3--ships-and-trajectories) (decision 90).
 
 ## Open questions
 

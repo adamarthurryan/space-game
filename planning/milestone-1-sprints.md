@@ -47,6 +47,7 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 - The System tab (body tree), click to select, double-click to focus. A minimal body inspector (physical data, elements, SOI radius).
 - `render/picking.ts`: screen-space picking of bodies and labels. `render/overlays/`: the label overlay, decluttered by priority. Both follow the rendering conventions in [architecture.md](../docs/architecture.md#units-precision-and-rendering-scale).
 - **R3F review** (decision 53): at the end of the sprint, check how much of `render/` uses JSX for more than which objects exist. If it is mostly refs and imperative code, plan the switch to plain three.js for sprint 3.
+  - **Outcome:** `render/` was mostly imperative, and the switch to plain three.js is decided for the start of sprint 3 (decision 90; the review is in [sprint-2.md](sprint-2.md#r3f-review)).
 
 **Done when:** you can zoom from low Earth orbit to the whole system in a few scroll steps without jitter, focus Jupiter's moons, snap to a plane, and warp a year in a few seconds.
 
@@ -54,14 +55,20 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 
 **Goal:** ships on patched-conic trajectories.
 
-- `sim/`: `clock.ts`, `events.ts` (priority queue of sim events, with handler registration), `world.ts`, `ship.ts`, `trajectory.ts`. World state is plain data (see [architecture.md](../docs/architecture.md#technical-constraints)). `Segment` is `ConicSegment` only, storing its starting state vector, with a `kind` discriminant and exhaustive switches.
+- **First: replace React Three Fiber with plain three.js** (decision 90), before trajectories add a second imperative line layer. Nothing outside `render/` changes, and the sprint 2 tests and smoke checks are the safety net.
+  - `render/MapRenderer.ts`: a class that owns the `WebGLRenderer` (logarithmic depth), the scene and camera, a `ResizeObserver` (canvas size and device pixel ratio), and the `requestAnimationFrame` loop. It runs the frame stages in the order of `STAGE` (clock, body positions, camera, projection, layers, labels), sharing the `MapFrame`, and disposes everything in `dispose()`.
+  - `render/layers/`: the bodies, orbit lines and markers as classes with `constructor(scene, frame, system)`, `update(frame, view)` and `dispose()`. The bodies layer rebuilds its meshes when the body system changes.
+  - `render/Scene.tsx` stays a React component: it creates the renderer in an effect, disposes it on unmount, and renders the DOM label overlay. The camera rig's and `useMapPointer`'s listeners move into the renderer (or stay as hooks on its canvas element).
+  - The pure modules (`camera/controller.ts`, `camera/framing.ts`, `projection.ts`, `picking.ts`, `precision.ts`, `overlays/declutter.ts`, `overlays/labelLayout.ts`, `orbitFade.ts`, `bodyStyle.ts`, `markerMaterial.ts`, `orbitLineObject.ts`) and their tests carry over unchanged.
+  - Remove `@react-three/fiber` from the dependencies, and lift the three.js pin (decision 48), which existed only because R3F 9.8 uses the deprecated `THREE.Clock`.
+- `sim/`: `events.ts` (priority queue of sim events, with handler registration), `ship.ts`, `trajectory.ts`, and the sprint 2 `clock.ts` and `world.ts` extended with next-event clamping and ships. World state is plain data (see [architecture.md](../docs/architecture.md#technical-constraints)). `Segment` is `ConicSegment` only, storing its starting state vector, with a `kind` discriminant and exhaustive switches.
 - Coasting propagation: find the earliest of SOI exit, SOI entry into a major child, impact, or horizon; transform to the new frame; stop at the segment cap.
-- `store/useWorld.ts`: the world object and its version counter; `game/actions.ts` as the entry point for player actions.
+- `store/useWorld.ts` (from sprint 2: the world object and its version counter); `game/actions.ts` as the entry point for player actions, with the clock controls moved behind it.
 - **Minimal content:** `content/types.ts`, `resources.ts`, `registry.ts`, and `modules/backbones.ts`, `engines.ts` and `tanks.ts` only, with a few chemical entries. The content test (ID uniqueness, cross-references, sanity). Ship mass, propellant and Δv (rocket equation) derived from them. A handful of preset designs.
 - A sandbox scenario: a few ships in Earth and lunar orbits, and a "spawn ship" debug action (design, parent body, orbit).
-- `render/TrajectoryLine.tsx`: segments drawn in the focus body's frame, colour per ship, SOI transition markers, Pe/Ap markers.
+- `render/layers/TrajectoryLayer.ts` (a plain three.js layer, like the orbit lines): segments drawn in the focus body's frame, colour per ship, SOI transition markers, Pe/Ap markers.
 
-**Done when:** a ship spawned on an Earth-escape orbit shows a trajectory that crosses into the Sun's frame correctly, a ship aimed at the Moon shows the SOI entry and the lunar flyby, and an impact ends the trajectory. A misspelt resource ID in content fails type checking, and a duplicate module ID fails the content test.
+**Done when:** `render/` has no React Three Fiber (no `@react-three/*` dependency) and the sprint 2 tests and smoke checks pass unchanged after the switch; a ship spawned on an Earth-escape orbit shows a trajectory that crosses into the Sun's frame correctly, a ship aimed at the Moon shows the SOI entry and the lunar flyby, and an impact ends the trajectory. A misspelt resource ID in content fails type checking, and a duplicate module ID fails the content test.
 
 ## Sprint 4 — Maneuver nodes
 
@@ -69,7 +76,7 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 
 - `sim/maneuver.ts`: `ManeuverNode` (with `execution: 'impulsive'` only), plan execution as an event (Δv applied in the local orbital frame, propellant deducted), enable/disable, delete.
 - Trajectory caching by ship state plus plan; recomputation of the active ship only while editing.
-- `render/NodeGizmo.tsx`: hover the trajectory to place a ghost node, click to create, six-handle gizmo with nonlinear drag sensitivity and fine/coarse modifiers, drag the node along the path to change its time.
+- `render/NodeGizmo.ts` (plain three.js; the handles are picked with a `Raycaster` from the renderer's pointer listeners, since there are no R3F pointer events): hover the trajectory to place a ghost node, click to create, six-handle gizmo with nonlinear drag sensitivity and fine/coarse modifiers, drag the node along the path to change its time.
 - Inspector node editor: time and Δv fields with units, scroll nudges, "add at next Pe / Ap / AN / DN / time T", snap to Pe/Ap.
 - Live feedback: Δv used and remaining (red when over budget), propellant used, burn duration warning, resulting orbit or encounter ("Moon encounter, Pe 230 km, in 3 d").
 

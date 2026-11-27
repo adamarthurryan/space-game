@@ -4,7 +4,7 @@ This document covers how the game is built. What the game does is in [features.m
 
 ## Technical constraints
 
-- Purely client-side, browser-based. TypeScript, Three.js, React Three Fiber (R3F). Desktop browsers, with mouse and keyboard.
+- Purely client-side, browser-based. TypeScript, plain three.js for the map, React for the UI panels. Desktop browsers, with mouse and keyboard. React Three Fiber (R3F) hosted the map up to milestone 1 sprint 2 and is replaced with plain three.js at the start of sprint 3 (decision 90).
 - **The simulation is independent of rendering.** Everything below `store/` is plain TypeScript with no React or Three.js, and can be unit-tested headlessly.
 - **World state is plain data:** objects, arrays and typed arrays keyed by ID, with no class instances and no functions. Sim code is functions over that data. This makes saves a straight serialisation, and keeps the option of moving the sim into a Web Worker later (see [Threads](#threads)).
 - **Reproducibility:** generation is seeded, so the same seed and generator version give the same system. Sim code uses no `Math.random` and no wall-clock time, so a world loaded from a save recomputes the same trajectories and event times on the same browser engine. Input replay is not a goal: saves store full world snapshots.
@@ -15,7 +15,7 @@ This document covers how the game is built. What the game does is in [features.m
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ ui/         React DOM: panels, inspectors, timeline, screens  │
-│ render/     R3F scene: bodies, orbits, trajectories, overlays │
+│ render/     three.js: bodies, orbits, trajectories, overlays  │
 ├──────────────────────────────────────────────────────────────┤
 │ store/      View state (zustand), world access, job worker    │
 ├──────────────────────────────────────────────────────────────┤
@@ -59,9 +59,9 @@ src/
   content/    types.ts, registry.ts, resources.ts, recipes.ts, structures.ts,
               modules/ (one file per module type)
   store/      useWorld.ts, useView.ts, jobs.ts, jobWorker.ts
-  render/     Scene.tsx, mapFrame.ts, projection.ts, precision.ts, picking.ts, Bodies.tsx,
-              BodyMarkers.tsx, OrbitLines.tsx, MinorBodies.tsx, TrajectoryLine.tsx, NodeGizmo.tsx,
-              overlays/ (labels, declutter), camera/ (controller, framing, rig)
+  render/     Scene.tsx (React host), MapRenderer.ts, mapFrame.ts, projection.ts, precision.ts,
+              picking.ts, NodeGizmo.ts, layers/ (bodies, orbits, markers, minor bodies,
+              trajectories), overlays/ (labels, declutter), camera/ (controller, framing)
   ui/         layout/, panels/, fleet/, timeline/, planner/, economy/, construction/, designer/
 ```
 
@@ -69,7 +69,7 @@ src/
 
 ## Threads
 
-- **The sim runs on the main thread.** The world is a single plain object. The clock advances it once per frame, before rendering. Render components read positions from it directly in `useFrame`; React panels re-render from a world version counter (see [State management and persistence](#state-management-and-persistence)). Interactive work, such as recomputing the active ship's trajectory while a node is dragged, is a direct function call with no thread round trip.
+- **The sim runs on the main thread.** The world is a single plain object. The clock advances it once per frame, before rendering. The renderer's frame stages read positions from it directly; React panels re-render from a world version counter (see [State management and persistence](#state-management-and-persistence)). Interactive work, such as recomputing the active ship's trajectory while a node is dragged, is a direct function call with no thread round trip.
 - **Heavy, pure computations run as jobs in a Web Worker.** `store/jobs.ts` sends a named job and its plain-data arguments to `store/jobWorker.ts`, which calls the matching pure function from `orbital/` or `planning/`, and returns the result as a promise. Large jobs are split into chunks so they can report progress and be cancelled. Jobs:
   - the porkchop grid (one Lambert solve per cell);
   - batch Lambert sweeps for transfer windows;
@@ -177,15 +177,16 @@ export const engines = [
 - **Orbit lines:** a body's orbit is drawn around its parent, resampled from its mean elements at `t` every frame in float64 and starting at the body, so the body always sits on its line (decision 80). Ship trajectory polylines (sprint 3) are generated in the focus body's frame and re-based when focus changes.
 - **Display scale:** bodies are drawn at true size when close, with a minimum screen-space size. Zoom is logarithmic. Minor bodies use instanced rendering, and their orbit lines are only drawn on demand.
 
-**Rendering conventions** (R3F is a thin shell; see decision 53):
+**Rendering conventions** (plain three.js; decision 90):
 
-- JSX only decides **which objects exist**: keyed by ID, from world and view selectors. Per-frame state (positions, camera-relative offsets, scales, fades) is set through refs in `useFrame`, never through props.
-- One `useFrame` **per stage** (all bodies, all orbits), iterating the world, rather than one per object. The stages run in a fixed order and share a per-scene `MapFrame` of plain arrays (`render/mapFrame.ts`): the clock, body world positions, the camera (which sets the origin), the projection of every body to the screen, the scene layers, then the labels (decision 84).
-- The sim clock ticks in the first stage, before all render updates.
-- **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest disc under the cursor, then a label, then the nearest marker within a pixel radius (decision 82). Map input uses DOM listeners on the canvas; R3F pointer events are not used.
+- **One renderer, one loop.** `render/MapRenderer.ts` owns the `WebGLRenderer`, the scene, the camera, a `ResizeObserver` and the `requestAnimationFrame` loop. `render/Scene.tsx` is the only React component: it creates the renderer in an effect, disposes it on unmount, and renders the DOM label overlay.
+- **Frame stages** run in a fixed order and share a per-scene `MapFrame` of plain arrays (`render/mapFrame.ts`), allocated once: the clock, body world positions, the camera (which sets the origin), the projection of every body to the screen, the scene layers, then the labels (decision 84). The sim clock ticks in the first stage, before all render updates.
+- **Layers** are classes (`render/layers/`) with `constructor(scene, frame, system)`, `update(frame, view)` and `dispose()`. One layer per kind of object (all bodies, all orbits, all trajectories), iterating the world, rather than one object per entity. A layer rebuilds its three.js objects only when the set of entities changes, never per frame.
+- **Logic stays out of three.js:** projection, picking, decluttering, fades, framing and the camera controller are pure TypeScript modules, tested headlessly; the layers and the renderer only apply their results to three.js objects.
+- **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest disc under the cursor, then a label, then the nearest marker within a pixel radius (decision 82). Map input uses DOM listeners on the canvas. Real meshes that need exact hits, such as the node gizmo's handles (sprint 4), use a `Raycaster` from the same listeners.
 - **Bodies on screen:** true-size spheres, a fixed-size marker below 3 px of disc radius, and a body within 6 px of its parent's centre merges into it (decision 79).
-- **R3F review** (end of sprint 2): `render/` turned out mostly imperative, so the recommendation is to replace R3F with plain three.js at the start of sprint 3 (decision 90). The conventions above still hold, with stages and layers as classes instead of `useFrame` callbacks.
-- **Labels are a custom overlay** with priority decluttering, not drei `<Html>`. drei is added only for specific helpers that are needed.
+- **Labels are a custom DOM overlay** with priority decluttering, positioned every frame by the labels stage (decision 83).
+- **Until sprint 3** the same stages and layers run as R3F `useFrame` callbacks and components; the switch keeps the stage order, the `MapFrame` and the pure modules.
 
 ## Celestial bodies
 
@@ -399,7 +400,7 @@ interface Alarm {
 - **The world** is the plain-data object described above. `store/useWorld.ts` holds it and a version counter, which is bumped after each frame in which the world changed and after each player action. React panels subscribe to the counter, through selectors, and re-render when it changes.
 - **Player actions** (`addNode`, `editArc`, `setAlarm`, `assignRoute`, `queueConstruction`, …) are calls into `game/actions.ts`.
 - **`view`** (zustand): active ship, selection, target, camera, filters, preview time, and the open screens. It is not saved.
-- Render components read positions every frame via `useFrame`, not through React state.
+- The renderer reads positions from the world every frame, not through React state. Panels that show changing values use `useSimTime` (10 Hz).
 - **Saves:** `{ version, seed, scenarioParams, world }` in IndexedDB. The snapshot holds the full true world, including the bodies. Nothing is regenerated from the seed on load, so changes to the generators don't break saves. While the game is in development, a save with a different `version` is refused, not migrated.
 
 ## Tooling and testing
@@ -417,4 +418,4 @@ interface Alarm {
 ## Later features
 
 - **Landing and atmospheric flight:** an abstract action, not a flight simulation. A planning-tool-like function checks the ship's capability flags, then computes the resource and Δv cost from its mass and the body's gravity (and atmosphere). The result is executed as an event that moves the ship between orbit and a surface location. A surface location is a stockpile location attached to the body, so the economy needs no special case.
-- **VR:** R3F supports WebXR via `@react-three/xr`, and its pointer events are already ray-based. Keep map interactions in the 3D scene where practical, so that they work with a controller ray.
+- **VR:** three.js supports WebXR through `renderer.xr`. Map picking is screen-space today; VR would add ray-based picking from a controller, alongside the raycasting the node gizmo already uses. Keep map interactions in the 3D scene where practical, so that they can work with a controller ray.
