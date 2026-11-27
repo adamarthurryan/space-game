@@ -31,14 +31,12 @@ This document covers how the game is built. What the game does is in [features.m
 │ orbital/    Pure math: Kepler, SOI, Lambert, integrators      │
 │ math/       Vec3 (float64), units, root finding, PRNG         │
 └──────────────────────────────────────────────────────────────┘
-  content/    Structured text data files: resources, modules, engines,
-              shielding, structures, recipes, unlock conditions
+  content/    Structured text files, one per module type (engines,
+              energy sources, …) plus resources, recipes, structures
 ```
 
 - **Dependency rule:** each layer imports only from layers below it. Everything except `ui/`, `render/` and `store/` must not import React or Three.js. ESLint import rules enforce this.
-- **Content as data:** all part types (backbones, modules, engines, shielding) and other content (resources, structures, recipes, unlock conditions) are defined in **structured text files** in `content/`, so they can be edited without touching code.
-  - Proposal: YAML files, each validated against a TypeScript schema (for example, with zod). Validation happens at build time, and in dev with hot reload, so a malformed part file fails fast with a clear error.
-  - `src/content/` holds only the schemas and the loader, which produces typed, read-only tables that any layer may import.
+- **Content as data:** ship module types and other game content are defined in structured text files, one file per type, so they can be edited without touching code (see [Content files](#content-files)).
 
 Source layout:
 
@@ -55,7 +53,7 @@ src/
   economy/    stockpile.ts, facility.ts, rates.ts, construction.ts, crew.ts, routes.ts
   game/       progression.ts, unlocks.ts, scenario.ts, rules.ts
   gen/        realSystem.ts, fictionalSystem.ts, composition.ts, scenario.ts
-  content/    schemas.ts, loader.ts        (data files live in /content/*.yaml)
+  content/    loader.ts, registry.ts, schemas/ (one schema per content file)
   store/      useWorld.ts, useView.ts, simWorker.ts
   render/     Scene.tsx, BodyMesh.tsx, MinorBodies.tsx, OrbitLine.tsx, TrajectoryLine.tsx,
               NodeGizmo.tsx, overlays/, camera/
@@ -63,6 +61,85 @@ src/
 ```
 
 **Worker split:** the layers from `sim/` up to `game/` run in a **Web Worker**. The main thread keeps a read-only mirror of the world, updated by diffs, and sends player actions to the worker as messages. The main thread evaluates positions needed every frame (bodies on rails, coasting conics) itself, from the mirrored elements.
+
+## Content files
+
+Ship module types, and the other content the game reads, live in **structured text files** in a top-level `/content` folder. There is **one file per module type**. Proposed format: YAML. Each file is a list of definitions of that type.
+
+```
+content/
+  modules/
+    backbones.yaml        # structural backbones: mass and volume limits, capability flags
+    engines.yaml          # chemical, solid-core NTR, gas-core NTR, nuclear electric, …
+    energy-sources.yaml   # solar arrays, fission reactors, (fusion cores), batteries
+    radiators.yaml        # heat rejection capacity
+    tanks.yaml            # propellant and volatile storage, by stored resource
+    cargo.yaml            # holds for bulk and packaged goods
+    crew.yaml             # crew compartments, life support, storm cellars
+    shielding.yaml        # water jackets, HDP liners, magnetic deflection
+    tools.yaml            # survey instruments, mining rigs, harvesters, tug clamps
+    facilities.yaml       # station modules: refineries, factories, shipyards, docks, habitats
+    landing.yaml          # (later) landing gear, aerodynamic envelopes
+  resources.yaml          # raw and refined resources
+  recipes.yaml            # facility inputs → outputs
+  structures.yaml         # habitats and megastructures (Bernal sphere, O'Neill segment, …)
+```
+
+**Schemas:**
+- Each file has its own schema in `src/content/schemas/`, written with a runtime-validating library (for example, zod) so that the TypeScript types and the validation come from one source.
+- Every module type extends a **shared base schema**. Each file then adds only the fields its type needs.
+
+```ts
+const ModuleBase = z.object({
+  id: z.string(),                       // unique across all module files
+  name: z.string(),
+  mass: z.number(),                     // kg, dry
+  volume: z.number(),                   // m³, counted against the backbone's limit
+  materials: z.record(ResourceId, z.number()),  // build cost, kg
+  unlock: UnlockCondition.optional(),   // resource-gated unlock (see features.md)
+  power: z.number().default(0),         // kW; negative = consumes
+  heat: z.number().default(0),          // kW of waste heat
+  crewRequired: z.number().default(0),
+  landingCompatible: z.boolean().default(true),
+});
+
+const Engine = ModuleBase.extend({
+  kind: z.enum(['chemical', 'ntr-solid', 'ntr-gas', 'electric']),
+  thrust: z.number(),                   // N
+  isp: z.number(),                      // s
+  propellant: z.record(ResourceId, z.number()),  // mass ratio of each propellant consumed
+  burnModel: z.enum(['impulsive', 'finite', 'arc']),
+  powerSource: z.enum(['self', 'external']),     // electric drives draw from energy sources
+});
+```
+
+Example entry in `engines.yaml`:
+
+```yaml
+- id: ntr-solid-small
+  name: Solid-core NTR (25 kN)
+  kind: ntr-solid
+  mass: 2300
+  volume: 9
+  thrust: 25000
+  isp: 900
+  propellant: { hydrogen: 1.0 }
+  burnModel: finite
+  powerSource: self
+  heat: 1200
+  materials: { structural-metals: 1800, fissiles: 40, precious-metals: 5 }
+  unlock: { delivered: { fissiles: 2000 } }
+```
+
+**Loading and validation:**
+- The loader (`src/content/loader.ts`) imports every file at build time through Vite, and validates it against its schema.
+- It then checks **cross-references**: resource IDs in materials, propellants and recipes, and module IDs in structures and unlocks. It also checks that IDs are unique across all files. Any error fails the build, and in dev it shows as an overlay naming the file and the entry.
+- Content changes in dev are hot-reloaded.
+- The result is a read-only **registry** (`src/content/registry.ts`) that any layer may import: `registry.engines`, `registry.byId(id)`, and so on.
+
+**Adding a module type:** add a YAML file, a schema extending `ModuleBase`, and a registry entry. Code that reads module stats should use the shared base fields where it can, so a new type often needs no other code changes. That code includes design validation, derived stats, the power and heat balance, and the designer UI.
+
+**Saves** store module IDs, not copies of the definitions. So a balance change to a content file applies to existing saves. The save `version` covers content schema changes.
 
 ## Units, precision and rendering scale
 
@@ -81,7 +158,7 @@ src/
 
 ## Ships, stations and stacks
 
-- A ship or station is **one backbone plus a set of module instances**, each referencing a content definition, plus stockpiles, crew and (for ships) a trajectory plan.
+- A ship or station is **one backbone plus a set of module instances**, each referencing a content definition by ID, plus stockpiles, crew and (for ships) a trajectory plan.
 - **Design validation:** total module mass and volume must fit within the backbone's limits. Later, capability flags (landing-rated backbone, landing gear, landing-incompatible modules, aerodynamic envelope) decide whether a design can land or fly in an atmosphere.
 - **Derived stats** are computed from the modules and the current stockpiles, and cached until either changes:
   - mass and volume used vs. backbone limits, thrust and Isp per engine, Δv;
