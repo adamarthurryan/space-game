@@ -6,6 +6,7 @@ import {
   formatDate,
   formatDistance,
   formatDuration,
+  formatDv,
   formatMass,
   formatScientific,
   formatSpeed,
@@ -99,5 +100,16 @@ describe('formatCountdown', () => {
     expect(formatCountdown(2 * 86_400 + 22 * 3600 + 5)).toBe('2 d 22 h');
     expect(formatCountdown(2 * 365.25 * 86_400)).toBe('2.000 yr');
     expect(formatCountdown(-5)).toBe('0 s');
+  });
+});
+
+describe('formatDv (S5b-18)', () => {
+  it('is m/s with a thousands separator and one decimal, with a sign', () => {
+    expect(formatDv(3.1305)).toBe('3,130.5 m/s');
+    expect(formatDv(0.0004)).toBe('0.4 m/s');
+    expect(formatDv(-0.012)).toBe('−12.0 m/s');
+    expect(formatDv(0)).toBe('0.0 m/s');
+    expect(formatDv(-0.00001)).toBe('0.0 m/s');
+    expect(formatDv(12.34567)).toBe('12,345.7 m/s');
   });
 });

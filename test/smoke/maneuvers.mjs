@@ -214,11 +214,8 @@ async function run(page, check) {
   await page.screenshot({ path: resolve(outDir, 'maneuvers-tli.png') });
 
   // 5. Chain: Add node ▾ → at next Pe, then a circularising retrograde Δv.
-  await page
-    .getByRole('link', { name: /Starship 4/ })
-    .or(page.getByRole('button', { name: /← Starship 4/ }))
-    .first()
-    .click();
+  // The node's row is expanded in the ship inspector (S5b-17); its header collapses it.
+  await page.getByRole('button', { name: /^◆ Node/, expanded: true }).click();
   await page.getByRole('button', { name: 'Add node ▾' }).click();
   await page.getByRole('menuitem', { name: 'At next Pe' }).click();
   await sleep(200);
@@ -303,7 +300,7 @@ async function run(page, check) {
   await page.getByPlaceholder('1h 30m').fill('1h');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await type(page, 'Prograde', '20 km/s');
-  await page.getByRole('button', { name: /← Starship 4/ }).click();
+  await page.getByRole('button', { name: /^◆ Node/, expanded: true }).click();
   const left = page.getByLabel('Δv left after plan');
   const leftText = await left.textContent();
   const leftClass = await left.getAttribute('class');

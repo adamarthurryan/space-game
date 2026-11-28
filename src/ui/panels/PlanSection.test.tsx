@@ -6,7 +6,10 @@ import { useWorld } from '../../store/useWorld';
 import { PlanSection } from './PlanSection';
 import { resetStores } from './testStores';
 
-beforeEach(resetStores);
+beforeEach(() => {
+  resetStores();
+  useView.getState().activate('ship-2');
+});
 afterEach(cleanup);
 
 const plan = () => useWorld.getState().world.ships['ship-2']!.plan;
@@ -19,8 +22,8 @@ describe('PlanSection', () => {
     render(<PlanSection shipId="ship-2" />);
     const rows = screen.getAllByRole('button', { name: /^◆ Node/ });
     expect(rows.map((r) => r.textContent)).toEqual([
-      expect.stringContaining('200 m/s'),
-      expect.stringContaining('100 m/s'),
+      expect.stringContaining('200.0 m/s'),
+      expect.stringContaining('100.0 m/s'),
     ]);
     fireEvent.click(rows[1]!);
     expect(useView.getState().selected).toEqual({ kind: 'node', shipId: 'ship-2', id: 'node-1' });
@@ -44,6 +47,7 @@ describe('PlanSection', () => {
   });
 
   it('shows an error for a passage that isn’t there', () => {
+    useView.getState().activate('ship-1');
     render(<PlanSection shipId="ship-1" />); // Kestrel: circular
     fireEvent.click(screen.getByRole('button', { name: 'Add node ▾' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'At next Pe' }));

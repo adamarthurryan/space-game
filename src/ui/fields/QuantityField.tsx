@@ -12,11 +12,11 @@ export interface QuantityFieldProps {
   nudge?: Nudge;
   /** Shown when the typed text can't be read. */
   invalidText?: string;
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
 /**
- * A typed value with units (S4-15): shows the formatted value; typing and Enter (or leaving the
+ * A typed value with units (S4-15), its label on a line above a full-width input (S5b-19): shows the formatted value; typing and Enter (or leaving the
  * field) commits, Escape reverts. Over a focused field, the wheel nudges by one step. An error
  * from the parse or the commit is shown under the field, and the old value is kept.
  */

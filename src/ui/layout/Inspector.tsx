@@ -1,10 +1,9 @@
 import { useView } from '../../store/useView';
 import { BodyInspector } from '../panels/BodyInspector';
-import { NodeEditor } from '../panels/NodeEditor';
 import { ShipInspector } from '../panels/ShipInspector';
 import styles from './Inspector.module.css';
 
-/** Details of the current selection: a body or a ship. */
+/** Details of the current selection: a body, or a ship (a selected node shows its ship, S5b-17). */
 export function Inspector() {
   const selected = useView((s) => s.selected);
   return (
@@ -13,7 +12,7 @@ export function Inspector() {
       {selected?.kind === 'ship' ? (
         <ShipInspector id={selected.id} />
       ) : selected?.kind === 'node' ? (
-        <NodeEditor shipId={selected.shipId} nodeId={selected.id} />
+        <ShipInspector id={selected.shipId} />
       ) : (
         <BodyInspector />
       )}

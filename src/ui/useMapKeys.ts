@@ -76,9 +76,9 @@ export function useMapKeys(): void {
           break;
         case 'Delete':
         case 'Backspace': {
-          // Deletes the selected node and selects its ship (S4-10).
+          // Deletes the selected node of the active ship, and selects its ship (S4-10, S5b-8).
           const sel = view.selected;
-          if (sel?.kind !== 'node') return;
+          if (sel?.kind !== 'node' || sel.shipId !== view.activeShipId) return;
           if (world.deleteNode(sel.shipId, sel.id).ok)
             view.select({ kind: 'ship', id: sel.shipId });
           break;

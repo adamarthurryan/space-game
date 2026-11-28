@@ -49,6 +49,18 @@ export function formatSpeed(kmps: number): string {
   return `${kmps.toFixed(2)} km/s`;
 }
 
+const DV = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/**
+ * Plan Δv (S5b-18 in planning/sprint-5b.md): m/s with a thousands separator and one decimal,
+ * `3,131.0 m/s`, `0.4 m/s`, `−12.0 m/s`. A ship's own Δv and orbital speeds use formatSpeed.
+ */
+export function formatDv(kmps: number): string {
+  const text = DV.format(Math.abs(kmps * 1000));
+  const negative = kmps < 0 && text !== '0.0';
+  return `${negative ? MINUS : ''}${text} m/s`;
+}
+
 /** `42.0 s`, `12 min 5 s`, `23 h 56 min`, `27 d 7 h`, `1.881 yr`. */
 export function formatDuration(s: number): string {
   const a = Math.abs(s);

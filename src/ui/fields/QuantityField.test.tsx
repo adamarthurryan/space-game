@@ -34,6 +34,13 @@ const input = () => screen.getByLabelText('Prograde') as HTMLInputElement;
 const value = () => Number(screen.getByLabelText('value').textContent);
 
 describe('QuantityField', () => {
+  it('puts its label on a line above the input (S5b-19)', () => {
+    render(<Harness />);
+    const label = input().closest('label')!;
+    expect([...label.children].map((e) => e.tagName)).toEqual(['SPAN', 'INPUT']);
+    expect(label.children[0]!.textContent).toBe('Prograde');
+  });
+
   it('commits a typed value with units on Enter', () => {
     render(<Harness />);
     fireEvent.change(input(), { target: { value: '3.1 km/s' } });
