@@ -25,7 +25,11 @@ function isValidHeap<T>(q: PQueue<T>): boolean {
   for (let i = 1; i < h.length; i++) {
     const p = h[(i - 1) >> 1]!;
     const c = h[i]!;
-    if (c.key < p.key || (c.key === p.key && c.seq < p.seq)) return false;
+    if (
+      c.key < p.key ||
+      (c.key === p.key && (c.rank < p.rank || (c.rank === p.rank && c.seq < p.seq)))
+    )
+      return false;
   }
   return true;
 }
@@ -163,7 +167,7 @@ describe('randomised check against a sorted-array model', () => {
         // Few distinct keys, so ties are common.
         const key = int(rng, 0, 40);
         const seq = push(q, key, step);
-        model.push({ key, seq, value: step });
+        model.push({ key, rank: 0, seq, value: step });
         model.sort(byKeySeq);
       } else if (r < 0.8) {
         const got = pop(q);
@@ -181,5 +185,33 @@ describe('randomised check against a sorted-array model', () => {
 
     expect(mismatches).toBe(0);
     expect(isValidHeap(q)).toBe(true);
+  });
+});
+
+describe('rank', () => {
+  it('orders equal keys by rank, then insertion order', () => {
+    const q = createPQueue<string>();
+    push(q, 5, 'a');
+    push(q, 5, 'b', -1);
+    push(q, 4, 'c', 3);
+    push(q, 5, 'd', -1);
+    push(q, 5, 'e');
+    expect(drain(q).map((e) => e.value)).toEqual(['c', 'b', 'd', 'a', 'e']);
+  });
+
+  it('keeps the heap valid through removals with ranks', () => {
+    const rng = createRng(7);
+    const q = createPQueue<number>();
+    for (let i = 0; i < 200; i++) push(q, int(rng, 0, 10), i, chance(rng, 0.5) ? -1 : 0);
+    removeWhere(q, (v) => v % 3 === 0);
+    expect(isValidHeap(q)).toBe(true);
+    remove(q, 4);
+    expect(isValidHeap(q)).toBe(true);
+    const out = drain(q);
+    for (let i = 1; i < out.length; i++) {
+      const a = out[i - 1]!;
+      const b = out[i]!;
+      expect(a.key < b.key || (a.key === b.key && a.rank <= b.rank)).toBe(true);
+    }
   });
 });

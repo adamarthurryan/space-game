@@ -13,6 +13,7 @@ import {
   type EventRegistry,
   type SimEvent,
 } from './events';
+import { scheduleAllAlarms, type Alarm, type AlarmId, type AlarmNotification } from './alarms';
 import type { Fleet, FleetId } from './fleet';
 import type { Ship, ShipId } from './ship';
 import type { StateVector } from '../orbital/elements';
@@ -34,6 +35,12 @@ export interface World {
   /** Fleets by ID, in seq order (S6-1 in planning/sprint-6.md). */
   fleets: Record<FleetId, Fleet>;
   nextFleetSeq: number;
+  /** Alarms by ID (S6-12). */
+  alarms: Record<AlarmId, Alarm>;
+  nextAlarmSeq: number;
+  /** Fired alarms, newest last (S6-17). */
+  notifications: AlarmNotification[];
+  nextNotificationSeq: number;
   /** Rebuildable from the rest; not saved (S3-11). */
   derived: Derived;
 }
@@ -59,6 +66,10 @@ export function createWorld(system: BodySystem, t = 0): World {
     nextNodeSeq: 1,
     fleets: {},
     nextFleetSeq: 1,
+    alarms: {},
+    nextAlarmSeq: 1,
+    notifications: [],
+    nextNotificationSeq: 1,
     derived: emptyDerived(),
   };
 }
@@ -76,10 +87,11 @@ export function refreshShip(world: World, shipId: ShipId): void {
   refreshShipDerived(world, shipId);
 }
 
-/** Rebuilds the trajectories and the event queue from the ships (S3-11). */
+/** Rebuilds the trajectories and the event queue from the ships and alarms (S3-11, S6-14). */
 export function rebuildDerived(world: World): void {
   world.derived = emptyDerived();
   for (const id of Object.keys(world.ships)) refreshShipDerived(world, id);
+  scheduleAllAlarms(world);
 }
 
 /**
@@ -130,7 +142,8 @@ export interface AdvanceResult {
  * due. After MAX_EVENTS_PER_FRAME events, t stays at the last one. When a handler asks to pause
  * (S4-7), the clock is paused with t at that event's time, a warp-to is cancelled, and nothing
  * more runs this frame. A warp-to (S5-3) caps the target at its stop; reaching it, after the
- * events due there, pauses the clock and ends the warp-to.
+ * events due there, pauses the clock and ends the warp-to. A handler asking to stop (an alarm's
+ * warp drop, S6-16) ends the frame at its event's time.
  */
 export function advanceWorld(world: World, dtWall: number, reg: EventRegistry): AdvanceResult {
   const { clock } = world;
@@ -145,11 +158,14 @@ export function advanceWorld(world: World, dtWall: number, reg: EventRegistry): 
     pop(queue);
     clock.t = Math.max(clock.t, next.key);
     events++;
-    if (dispatch(reg, world, next.value).pause) {
+    const out = dispatch(reg, world, next.value);
+    if (out.pause) {
       clock.paused = true;
       clock.warpTo = null;
       return { events, pause: true, arrived: false };
     }
+    // A warp drop (S6-16): the rest of the frame would run at the old rate.
+    if (out.stop) return { events, pause: false, arrived: false };
   }
   clock.t = Math.max(clock.t, target);
   if (clock.warpTo && clock.t >= clock.warpTo.t) {

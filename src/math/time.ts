@@ -112,3 +112,34 @@ export function simTimeFromJd(epochJd: number, jd: number): number {
 export function centuriesSinceJ2000(jd: number): number {
   return (jd - J2000_JD) / DAYS_PER_JULIAN_CENTURY;
 }
+
+// ---- Text (moved from ui/format.ts so the sim can build notification texts, S6-17) -------
+
+const MINUS = '−';
+const pad = (n: number, width: number) => String(n).padStart(width, '0');
+const DAY = 86_400;
+const YEAR = 365.25 * DAY;
+
+/**
+ * `YYYY-MM-DD hh:mm:ss`, shown as if UTC (S1-2, S2-19). Astronomical year numbering with a sign
+ * for years ≤ 0 (`−0999-01-01`); seconds are truncated.
+ */
+export function formatDate(d: CalendarDate): string {
+  const year = d.year > 0 ? pad(d.year, 4) : `${MINUS}${pad(-d.year, 4)}`;
+  const date = `${year}-${pad(d.month, 2)}-${pad(d.day, 2)}`;
+  const time = `${pad(d.hour, 2)}:${pad(d.minute, 2)}:${pad(Math.floor(d.second), 2)}`;
+  return `${date} ${time}`;
+}
+
+/**
+ * A time until an event, to the two leading units: `42 s`, `41 min`, `5 h 12 min`, `2 d 22 h`,
+ * `1.881 yr`.
+ */
+export function formatCountdown(s: number): string {
+  const a = Math.max(s, 0);
+  if (a < 60) return `${Math.floor(a)} s`;
+  if (a < 3600) return `${Math.floor(a / 60)} min`;
+  if (a < DAY) return `${Math.floor(a / 3600)} h ${Math.floor((a % 3600) / 60)} min`;
+  if (a < YEAR) return `${Math.floor(a / DAY)} d ${Math.floor((a % DAY) / 3600)} h`;
+  return `${(a / YEAR).toFixed(3)} yr`;
+}

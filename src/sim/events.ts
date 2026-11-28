@@ -8,6 +8,7 @@
  */
 
 import { createPQueue, push, removeWhere } from '../math/pqueue';
+import { deleteNodeAlarms, deleteShipAlarms, scheduleShipAlarms, type AlarmId } from './alarms';
 import type { PausableEvent } from './clock';
 import { burnPropellant, type NodeId } from './maneuver';
 import { shipStats, type ShipId } from './ship';
@@ -22,15 +23,32 @@ import {
 } from './trajectory';
 import type { Derived, World } from './world';
 
-export type SimEvent =
+/** A ship's segment-end event: each ship has at most one queued (S3-10). */
+export type ShipEvent =
   | { type: 'soi-change'; shipId: ShipId; trajectoryVersion: number }
   | { type: 'impact'; shipId: ShipId; trajectoryVersion: number }
   | { type: 'trajectory-horizon'; shipId: ShipId; trajectoryVersion: number }
   | { type: 'node'; shipId: ShipId; nodeId: NodeId; trajectoryVersion: number };
+export type ShipEventType = ShipEvent['type'];
+export type SimEvent =
+  | ShipEvent
+  /** An alarm firing (S6-14 in planning/sprint-6.md); ranked before ship events at a tie. */
+  | {
+      type: 'alarm';
+      alarmId: AlarmId;
+      /** Null for a time alarm. */
+      shipId: ShipId | null;
+      /** The time of the event it fires for. */
+      occurrence: number;
+      /** The event's name when it was queued: "Moon SOI entry". */
+      label: string;
+    };
 export type SimEventType = SimEvent['type'];
 
 export interface EventOutcome {
   pause?: boolean;
+  /** End the frame at this event's time without pausing (a warp drop, S6-16). */
+  stop?: boolean;
 }
 export type EventHandler<E extends SimEvent = SimEvent> = (
   world: World,
@@ -57,17 +75,23 @@ export function on<T extends SimEventType>(
   handlers[type] = list;
 }
 
-/** Calls every handler for the event's type; pauses if any asks to. */
+/** Calls every handler for the event's type; pauses or stops if any asks to. */
 export function dispatch(reg: EventRegistry, world: World, e: SimEvent): EventOutcome {
   let pause = false;
+  let stop = false;
   for (const h of reg.handlers[e.type] ?? []) {
-    if (h(world, e)?.pause) pause = true;
+    const out = h(world, e);
+    if (out?.pause) pause = true;
+    if (out?.stop) stop = true;
   }
-  return pause ? { pause } : {};
+  const out: EventOutcome = {};
+  if (pause) out.pause = true;
+  if (stop) out.stop = true;
+  return out;
 }
 
 /** The event that ends a segment. */
-function eventTypeFor(end: SegmentEnd): SimEventType {
+function eventTypeFor(end: SegmentEnd): ShipEventType {
   switch (end) {
     case 'soi-exit':
     case 'soi-enter':
@@ -96,10 +120,13 @@ export function emptyDerived(): Derived {
 /** Trajectories kept per ship in the cache (S4-8). */
 export const TRAJECTORY_CACHE_SIZE = 4;
 
-/** Replaces the ship's pending event with the end of its current segment (none if destroyed). */
+/**
+ * Replaces the ship's pending event with the end of its current segment (none if destroyed).
+ * Its alarm events are left alone (S6-14).
+ */
 export function queueShipEvent(world: World, shipId: ShipId): void {
   const { events, trajectories } = world.derived;
-  removeWhere(events, (e) => e.shipId === shipId);
+  removeWhere(events, (e) => e.type !== 'alarm' && e.shipId === shipId);
   const ship = world.ships[shipId];
   const traj = trajectories[shipId];
   const seg = traj?.segments[0];
@@ -118,7 +145,7 @@ export function queueShipEvent(world: World, shipId: ShipId): void {
 /**
  * Brings one ship's trajectory up to date with its orbit, plan and Δv (S4-8): nothing changes if
  * the key is the same; otherwise the segments come from the ship's cache or are computed, the
- * version is bumped, and the ship's event is re-queued.
+ * version is bumped, and the ship's event and alarm events are re-queued (S6-14).
  */
 export function refreshShipDerived(world: World, shipId: ShipId): void {
   const ship = world.ships[shipId];
@@ -146,6 +173,7 @@ export function refreshShipDerived(world: World, shipId: ShipId): void {
   if (cache.length > TRAJECTORY_CACHE_SIZE) cache.shift();
   d.trajectories[shipId] = { segments, version: (old?.version ?? 0) + 1, key };
   queueShipEvent(world, shipId);
+  scheduleShipAlarms(world, shipId);
 }
 
 /** Whether a handled event of this type pauses the clock (S4-7). */
@@ -153,7 +181,7 @@ const pauseFor = (world: World, type: PausableEvent): EventOutcome =>
   world.clock.pauseOn[type] ? { pause: true } : {};
 
 /** The ship's trajectory if the event is current for it, else null (a stale event). */
-function current(world: World, e: SimEvent) {
+function current(world: World, e: ShipEvent) {
   const ship = world.ships[e.shipId];
   const traj = world.derived.trajectories[e.shipId];
   if (!ship || ship.status !== 'coasting' || !traj || traj.version !== e.trajectoryVersion) {
@@ -180,6 +208,7 @@ export function registerShipHandlers(reg: EventRegistry): void {
     c.ship.status = 'destroyed';
     c.ship.destroyedAt = { t: c.seg.tEnd, bodyId: c.seg.endTargetId ?? c.seg.parentId };
     c.ship.plan = [];
+    deleteShipAlarms(world, e.shipId);
     refreshShipDerived(world, e.shipId);
     return pauseFor(world, 'impact');
   });
@@ -191,6 +220,7 @@ export function registerShipHandlers(reg: EventRegistry): void {
     if (!next) return;
     burnPropellant(c.ship, c.seg.dvApplied ?? 0);
     c.ship.plan = c.ship.plan.filter((n) => n.id !== e.nodeId);
+    deleteNodeAlarms(world, e.shipId, e.nodeId);
     c.ship.orbit = next;
     refreshShipDerived(world, e.shipId);
     return pauseFor(world, 'node');

@@ -79,4 +79,26 @@ describe('fleets', () => {
     expect(world.ships['ship-1']!.fleetId).toBeNull();
     expect(groupOrder(world)).toEqual([null]);
   });
+
+  it("deleting a fleet deletes its fleet alarms, not its ships' own", () => {
+    const world = worldWithShips(1);
+    const f = createFleet(world, 'A');
+    assignShip(world, 'ship-1', f);
+    const common = { leadTime: 0, action: 'pause' as const, enabled: true };
+    const trigger = { kind: 'event-type' as const, type: 'node' as const };
+    const fleetAlarm = addAlarm(world, {
+      ...common,
+      trigger,
+      scope: { kind: 'fleet', fleetId: f },
+    });
+    const shipAlarm = addAlarm(world, {
+      ...common,
+      trigger,
+      scope: { kind: 'ship', shipId: 'ship-1' },
+    });
+    deleteFleet(world, f);
+    expect(world.alarms[fleetAlarm]).toBeUndefined();
+    expect(world.alarms[shipAlarm]).toBeDefined();
+    expect(alarmSchedule(world)).toEqual([]);
+  });
 });

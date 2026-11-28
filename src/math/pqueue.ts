@@ -1,19 +1,22 @@
 /**
- * A priority queue: a binary min-heap on (key, seq), kept in a plain object (decision S0-6).
+ * A priority queue: a binary min-heap on (key, rank, seq), kept in a plain object (decision S0-6).
  * The basis of the sim event queue (sprint 3).
  *
- * Entries with equal keys come out in insertion order, so simultaneous events are ordered
+ * Entries with equal keys come out by rank (default 0; lower first, S6-15 in
+ * planning/sprint-6.md), then in insertion order, so simultaneous events are ordered
  * deterministically. The queue is plain data if its values are.
  */
 
 export interface PQEntry<T> {
   key: number;
+  /** Tie-breaker for equal keys, before seq: lower first (S6-15). */
+  rank: number;
   /** Insertion number: the tie-breaker for equal keys, and the handle for `remove`. */
   seq: number;
   value: T;
 }
 
-/** Binary min-heap on (key, seq). Plain data if T is. */
+/** Binary min-heap on (key, rank, seq). Plain data if T is. */
 export interface PQueue<T> {
   heap: PQEntry<T>[];
   nextSeq: number;
@@ -24,7 +27,10 @@ export function createPQueue<T>(): PQueue<T> {
 }
 
 function less<T>(x: PQEntry<T>, y: PQEntry<T>): boolean {
-  return x.key < y.key || (x.key === y.key && x.seq < y.seq);
+  return (
+    x.key < y.key ||
+    (x.key === y.key && (x.rank < y.rank || (x.rank === y.rank && x.seq < y.seq)))
+  );
 }
 
 function at<T>(heap: PQEntry<T>[], i: number): PQEntry<T> {
@@ -72,21 +78,24 @@ function removeAt<T>(heap: PQEntry<T>[], i: number): PQEntry<T> {
   return removed;
 }
 
-/** Adds a value and returns its seq, the handle for `remove`. Throws on a non-finite key. */
-export function push<T>(q: PQueue<T>, key: number, value: T): number {
+/**
+ * Adds a value and returns its seq, the handle for `remove`. Equal keys come out by rank, then
+ * insertion order. Throws on a non-finite key.
+ */
+export function push<T>(q: PQueue<T>, key: number, value: T, rank = 0): number {
   if (!Number.isFinite(key)) throw new RangeError(`pqueue key must be finite, got ${key}`);
   const seq = q.nextSeq++;
-  q.heap.push({ key, seq, value });
+  q.heap.push({ key, rank, seq, value });
   siftUp(q.heap, q.heap.length - 1);
   return seq;
 }
 
-/** The entry with the smallest (key, seq), without removing it. */
+/** The entry with the smallest (key, rank, seq), without removing it. */
 export function peek<T>(q: PQueue<T>): PQEntry<T> | undefined {
   return q.heap[0];
 }
 
-/** Removes and returns the entry with the smallest (key, seq). */
+/** Removes and returns the entry with the smallest (key, rank, seq). */
 export function pop<T>(q: PQueue<T>): PQEntry<T> | undefined {
   if (q.heap.length === 0) return undefined;
   return removeAt(q.heap, 0);

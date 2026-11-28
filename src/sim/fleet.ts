@@ -4,6 +4,7 @@
  * null for Unassigned. These functions assume valid input; `game/actions.ts` checks the rules.
  */
 
+import { deleteFleetAlarms, scheduleShipAlarms } from './alarms';
 import type { ShipId } from './ship';
 import type { World } from './world';
 
@@ -62,15 +63,17 @@ export function renameFleet(world: World, id: FleetId, name: string): void {
 /** Moves its ships to Unassigned, then removes it (its alarms go with it, S6-2). */
 export function deleteFleet(world: World, id: FleetId): void {
   if (!world.fleets[id]) return;
+  deleteFleetAlarms(world, id);
   for (const shipId of fleetShips(world, id)) assignShip(world, shipId, null);
   delete world.fleets[id];
 }
 
-/** Sets the ship's fleet (null = Unassigned). */
+/** Sets the ship's fleet (null = Unassigned), and re-schedules its alarms (S6-14). */
 export function assignShip(world: World, shipId: ShipId, fleetId: FleetId | null): void {
   const ship = world.ships[shipId];
   if (!ship || ship.fleetId === fleetId) return;
   ship.fleetId = fleetId;
+  scheduleShipAlarms(world, shipId);
 }
 
 /** Fleets in seq order, then null (Unassigned). */
