@@ -125,6 +125,8 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 - `sim/alarms.ts`: the `Alarm` model, with plan-item, event-type (optional target, optional once) and time triggers; fleet scope resolved at evaluation time, lead times, pause or drop warp. Set from a timeline event, a trajectory marker, or a ship or fleet context menu. Notifications with "Go to". The alarm list popover. The default impact alarm.
 - The Filters panel: map layers (orbits, trajectories all/active/fleet/none, nodes, labels, SOI spheres) and category toggles, plus search.
 
+- **Detailed plan:** [sprint-6.md](sprint-6.md) (decisions S6-1 to S6-29).
+
 **Done when:** with three fleets of ships, a fleet-wide "SOI change" alarm fires for a ship added to the fleet after the alarm was set, an alarm on one node survives that node being edited, and a "next SOI entry into the Moon" alarm set from the timeline still fires after a node earlier in the plan is added.
 
 ## Sprint 7 — Targets and the basic planning tools
