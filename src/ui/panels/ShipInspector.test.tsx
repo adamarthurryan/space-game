@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useView } from '../../store/useView';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { presetOrbit } from '../../gen/sandboxShips';
 import { useWorld } from '../../store/useWorld';
@@ -50,5 +52,44 @@ describe('ShipInspector', () => {
     });
     expect(screen.getByText(/destroyed: impacted Earth/)).toBeTruthy();
     expect(screen.queryByText('Upcoming events')).toBeNull();
+  });
+});
+
+describe('ShipInspector: the full inspector (S6-9)', () => {
+  it('has its sections in order', () => {
+    render(<ShipInspector id="ship-1" />);
+    const sections = [...document.querySelectorAll('h4, label')].map((e) => e.textContent);
+    expect(sections).toEqual([
+      'Fleet',
+      'Plan',
+      'Modules',
+      'Mass and propellant',
+      'Engines',
+      'Orbit',
+      'Upcoming events',
+    ]);
+    expect(screen.getByRole('meter', { name: 'Mass' })).toBeTruthy();
+    expect(screen.getByRole('meter', { name: 'Volume' })).toBeTruthy();
+    expect(screen.getAllByText(/× .*\(chemical\)/)).toHaveLength(2);
+  });
+
+  it('moves the ship to a fleet with the Fleet select', async () => {
+    const user = userEvent.setup();
+    act(() => void useWorld.getState().createFleet('Survey'));
+    render(<ShipInspector id="ship-1" />);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Fleet' }), 'Survey');
+    expect(useWorld.getState().world.ships['ship-1']!.fleetId).toBe('fleet-1');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Fleet' }), 'Unassigned');
+    expect(useWorld.getState().world.ships['ship-1']!.fleetId).toBeNull();
+  });
+
+  it('flies the ship from its header', async () => {
+    const user = userEvent.setup();
+    render(<ShipInspector id="ship-2" />);
+    await user.click(screen.getByRole('button', { name: 'Fly (A)' }));
+    expect(useView.getState().activeShipId).toBe('ship-2');
+    expect(screen.getByRole('button', { name: '★ Tern' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
   });
 });

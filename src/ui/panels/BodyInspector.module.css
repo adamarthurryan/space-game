@@ -62,3 +62,48 @@
   cursor: pointer;
   text-align: left;
 }
+
+.bar {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.barLabel {
+  color: var(--color-text-dim);
+}
+
+.barTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-panel-raised);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.barOver .barFill {
+  background: var(--color-danger);
+}
+
+.barText {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.select {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
-import { mapSelection, focusRefOf, shipOf, useView } from '../store/useView';
+import { focusRefOf, mapSelection, resolveActiveShip, shipOf, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
+import { cycleShip, type CycleMode } from './fleet/cycle';
 
 /**
  * Whether the selection has an orbital plane to snap to: a body other than the root, or a
@@ -14,6 +15,16 @@ export function canSnapToSelectedOrbit(): boolean {
   if (ref.kind === 'ship') return world.ships[ref.id]?.status === 'coasting';
   return !!world.system.bodies[ref.id]?.orbit;
 }
+/** The cycling keys (S6-8). */
+const CYCLE_KEYS: Record<string, CycleMode> = {
+  ']': 'next',
+  '[': 'previous',
+  '}': 'next-in-fleet',
+  '{': 'previous-in-fleet',
+  i: 'next-idle',
+  I: 'next-idle',
+};
+
 /** Text fields keep every key; buttons, tabs and tree rows keep Space and Enter. */
 function ignoredFor(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -26,7 +37,8 @@ function ignoredFor(target: EventTarget | null, key: string): boolean {
  * Map shortcuts (S2-20): Space play/pause, `,` and `.` warp down and up, F focus the selection,
  * A fly (activate) the selected ship, E and P snap to the ecliptic and the selected body's or
  * ship's orbit, Esc end a preview or clear the selection, Delete remove the selected node (F on
- * a node focuses its ship). Ignored
+ * a node focuses its ship), `]` `[` next and previous ship, `}` `{` next and previous in the
+ * active ship's fleet, I next idle ship (S6-8; cycling activates, selects and focuses). Ignored
  * while a text field has focus, and with Ctrl, Alt or Meta held.
  */
 export function useMapKeys(): void {
@@ -76,6 +88,23 @@ export function useMapKeys(): void {
           else if (view.selected) view.select(null);
           else return;
           break;
+        case ']':
+        case '[':
+        case '}':
+        case '{':
+        case 'i':
+        case 'I': {
+          const mode = CYCLE_KEYS[e.key]!;
+          const id = cycleShip(
+            world.world,
+            resolveActiveShip(world.world, view.activeShipId),
+            mode,
+          );
+          if (id === null) return;
+          view.activate(id);
+          view.focusOn({ kind: 'ship', id });
+          break;
+        }
         case 'Delete':
         case 'Backspace': {
           // Deletes the selected node of the active ship, and selects its ship (S4-10, S5b-8).
