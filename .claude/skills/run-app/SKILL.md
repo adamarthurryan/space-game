@@ -32,7 +32,7 @@ it started.
   clock pausing exactly at each node and the lunar orbit matching the prediction, the Pause on
   menu, and an over-budget plan.
 - `timeline.mjs` checks the timeline (sprint 5): the strip's glyphs, warp-to, and preview scrubbing.
-- `usability.mjs` checks the interface review (sprint 5b): the start view and hidden chrome, the spawn flash and merged label, A and Fly, focus keeping the distance, circular orbits, the inline node editor, the encounter ghost, the gizmo at small scale, Frame ▾, read-only plans, the fixed strip scale and its shading, and the frame following the active ship.
+- `usability.mjs` checks the interface review (sprint 5b): the start view and hidden chrome, the spawn flash and merged label, A and Fly, focus keeping the distance, circular orbits, the inline node editor, the encounter ghost, the gizmo shrinking and hiding at small scale, Frame ▾, read-only plans, the fixed strip scale and its shading, and the frame following the active ship.
 - All of them fail on any console error, warning or failed request, except SwiftShader's "GPU stall due
   to ReadPixels" message, which the screenshots themselves cause.
 

@@ -9,7 +9,10 @@ import {
   dragDelta,
   dragModeOf,
   GIZMO_ARM_PX,
+  GIZMO_FULL_CONIC_PX,
+  GIZMO_MIN_ARM_PX,
   GIZMO_MIN_CONIC_PX,
+  gizmoArmPx,
   gizmoScale,
   handleDirection,
   handleEdit,
@@ -136,5 +139,19 @@ describe('conicScreenSize (S5b-15)', () => {
     expect(px).toBeLessThan(conicScreenSize(far, g, 0, 6e4, id));
     const near: FrameCamera = { ...cam, position: vec3(0, 0, 10) };
     expect(conicScreenSize(near, g, 0, 3e4, (p) => vec3(p.x, p.y, p.z + 20))).toBe(Infinity);
+  });
+});
+
+describe('gizmoArmPx (decision 181)', () => {
+  it('is full size at 150 px, shrinks linearly to 20 px at 37.5 px, and hides below', () => {
+    expect(GIZMO_FULL_CONIC_PX).toBe(150);
+    expect(GIZMO_MIN_CONIC_PX).toBe(37.5);
+    expect(gizmoArmPx(1000)).toBe(GIZMO_ARM_PX);
+    expect(gizmoArmPx(150)).toBe(GIZMO_ARM_PX);
+    expect(gizmoArmPx(37.5)).toBe(GIZMO_MIN_ARM_PX);
+    expect(gizmoArmPx((150 + 37.5) / 2)).toBeCloseTo((60 + 20) / 2, 12);
+    expect(gizmoArmPx(37.4)).toBeNull();
+    expect(gizmoArmPx(Infinity)).toBe(GIZMO_ARM_PX);
+    expect(gizmoArmPx(NaN)).toBeNull();
   });
 });

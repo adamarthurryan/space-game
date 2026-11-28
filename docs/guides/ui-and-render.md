@@ -195,7 +195,7 @@ The rules are:
 | `TrajectoryLayer` | Each ship's trajectory segments. Each segment has three pieces: `main`; `last`, the faded final revolution before the segment's end; and `rest`, the rest of the current orbit after a node, for the active ship only. The pieces are drawn relative to `view.frameBodyId`, and the planned path after the first node is dashed | `trajectoryGeometry.ts`, `trajectoryMaterial.ts`, `screenDash.ts` |
 | `MarkerLayer` | One `THREE.Points` for body markers and one for ship triangles, with sizes in device px (0 = hidden) | `markerMaterial.ts`, `shipStyle.ts` |
 | `EncounterGhostLayer` | For each SOI entry on the selected, hovered, focused or active ship's path, a camera-facing ring of the entered body's SOI radius where the body will be at the entry; fills `frame.encounters` for the marker overlay | `encounterGhosts.ts` |
-| `NodeGizmo` | Six Δv handles on the active ship's selected node, kept 60 px long on screen and drawn on top; hidden while the node's conic is under 150 px across (`conicScreenSize`), and handles behind a disc are dimmed and not hittable | `nodeGizmoMath.ts`, `nodeMarkers.ts` |
+| `NodeGizmo` | Six Δv handles on the active ship's selected node, kept 60 px long on screen and drawn on top; sized by the planned path after the node (`conicScreenSize`, `gizmoArmPx`: 60 px arms at 150 px across, down to 20 px at 37.5 px, hidden below), and handles behind a disc are dimmed and not hittable | `nodeGizmoMath.ts`, `nodeMarkers.ts` |
 
 **`trajectoryGeometry.ts`** is the core of the trajectory drawing:
 

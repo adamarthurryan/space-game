@@ -4,8 +4,8 @@
 //   npm run smoke
 //
 // Reads the dev-only debug handle `window.__spaceGame`: frame(), fly(), flash(),
-// encounterGhosts(), labels() (with the parts of merged labels), gizmo() (with visible and
-// conicPx), trajectoryMarkers(), timeline() (with ticks and beyondX), plus the earlier probes.
+// encounterGhosts(), labels() (with the parts of merged labels), gizmo() (with visible, conicPx
+// and armPx), trajectoryMarkers(), timeline() (with ticks and beyondX), plus the earlier probes.
 
 import { resolve } from 'node:path';
 import { outDir, smoke, url } from './lib.mjs';
@@ -231,17 +231,32 @@ async function run(page, check) {
   await wheel(page, -3);
   await page.screenshot({ path: resolve(outDir, 'usability-encounter.png') });
 
-  // 8. The gizmo hides below 150 px (S5b-15). Zoom in on the low orbit, then out.
+  // 8. The gizmo follows the planned path's size on screen (decision 181): full size at 150 px
+  // and above, shrinking to 20 px arms at 37.5 px, hidden below. Zoom in, then out notch by notch.
   await wheel(page, -4);
   const gzIn = await probe(page, 'gizmo');
-  check(gzIn?.visible === true, `8. zoomed in, the gizmo shows (${gzIn?.conicPx?.toFixed(0)} px)`);
-  await wheel(page, 6);
-  const gzOut = await probe(page, 'gizmo');
   check(
-    gzOut?.visible === false && gzOut.conicPx < 150,
-    `8. zoomed out, it hides (${gzOut?.conicPx?.toFixed(0)} px)`,
+    gzIn?.visible === true && gzIn.armPx === 60,
+    `8. zoomed in, the gizmo shows at full size (path ${gzIn?.conicPx?.toFixed(0)} px)`,
   );
-  await wheel(page, -6);
+  let shrunk = null;
+  let notches = 0;
+  let gz = gzIn;
+  while (gz?.visible && notches < 40) {
+    await wheel(page, 1);
+    notches++;
+    gz = await probe(page, 'gizmo');
+    if (gz?.visible && gz.armPx < 60 && !shrunk) shrunk = gz;
+  }
+  check(
+    shrunk !== null && shrunk.armPx >= 20 && shrunk.conicPx < 150 && shrunk.conicPx >= 37.5,
+    `8. zooming out, it shrinks (arm ${shrunk?.armPx?.toFixed(1)} px, path ${shrunk?.conicPx?.toFixed(0)} px)`,
+  );
+  check(
+    gz?.visible === false && gz.conicPx < 37.5,
+    `8. further out, it hides (path ${gz?.conicPx?.toFixed(0)} px, ${notches} notches)`,
+  );
+  await wheel(page, -notches);
   check((await probe(page, 'gizmo'))?.visible === true, '8. zoomed back in, it shows again');
 
   // 9. Frame ▾ (S5b-2, S5b-4).

@@ -6,8 +6,10 @@
  * drag of the node itself slides its time along the path without the node, frozen at the press.
  * Edits are queued and applied once per animation frame by `flush()` (S4-8).
  *
- * It is shown only while the node's conic is at least 150 px across on screen (S5b-15 in
- * planning/sprint-5b.md); below that, only the node glyph is drawn and the node can't be dragged.
+ * Its size follows the planned path after the node (decision 181, revising S5b-15 in
+ * planning/sprint-5b.md): full size while that path is at least 150 px across on screen,
+ * shrinking to 20 px arms at 37.5 px, and hidden below that, when only the node glyph is drawn
+ * and the node can't be dragged.
  * A handle behind a nearer body's disc is dimmed and can't be picked (S5b-14).
  */
 
@@ -42,8 +44,8 @@ import {
   conicScreenSize,
   dragDelta,
   dragModeOf,
-  GIZMO_ARM_PX,
-  GIZMO_MIN_CONIC_PX,
+  GIZMO_MIN_ARM_PX,
+  gizmoArmPx,
   gizmoScale,
   GIZMO_HANDLES,
   handleDirection,
@@ -96,8 +98,10 @@ interface Target {
   scene: Vec3;
   scale: number;
   basis: OrbitalBasis;
-  /** The node's conic across on screen, px (S5b-15). */
+  /** The planned path after the node, across on screen, px (decision 181). */
   conicPx: number;
+  /** The arm length on screen, px, or null when the gizmo is hidden. */
+  armPx: number | null;
 }
 
 type Drag =
@@ -189,7 +193,7 @@ export class NodeGizmo implements MapLayer {
   update(frame: MapFrame, view: ViewSnapshot): void {
     this.target = this.findTarget(frame, view);
     const t = this.target;
-    this.group.visible = t !== null && t.conicPx >= GIZMO_MIN_CONIC_PX;
+    this.group.visible = t !== null && t.armPx !== null;
     if (!t || !this.group.visible) return;
     const centre: ScreenPoint = { x: 0, y: 0, depth: 0 };
     const tip: ScreenPoint = { x: 0, y: 0, depth: 0 };
@@ -213,7 +217,7 @@ export class NodeGizmo implements MapLayer {
         tip,
       );
       const armPx = Math.hypot(tip.x - centre.x, tip.y - centre.y);
-      o.shown = tip.depth > 0 && armPx >= MIN_ARM_SHARE * GIZMO_ARM_PX * CONE_AT;
+      o.shown = tip.depth > 0 && armPx >= MIN_ARM_SHARE * (t.armPx ?? 0) * CONE_AT;
       o.cone.visible = o.shown;
       o.occluded = sceneOccluded(
         frame,
@@ -260,10 +264,14 @@ export class NodeGizmo implements MapLayer {
     const sp: ScreenPoint = { x: 0, y: 0, depth: 0 };
     projectScenePoint(frame.camera, scene.x, scene.y, scene.z, sp);
     if (!(sp.depth > 0)) return null;
-    // The conic's points, relative to its parent, into the scene: offset as the node is.
+    // The planned path after the node (decision 181): the segment that starts at an executed
+    // node, around the same parent; for a disabled node, the path it sits on.
+    const i = traj.segments.indexOf(a.segment);
+    const next = traj.segments[i + 1];
+    const seg = a.segment.endNodeId === node.id && next ? next : a.segment;
+    // Its points, relative to its parent, into the scene: offset as the node is.
     const off = vec3(scene.x - a.pre.r.x, scene.y - a.pre.r.y, scene.z - a.pre.r.z);
     const out = vec3(0, 0, 0);
-    const seg = a.segment;
     const conicPx = conicScreenSize(
       frame.camera,
       conicGeometry(world.system, seg),
@@ -276,14 +284,16 @@ export class NodeGizmo implements MapLayer {
         return out;
       },
     );
+    const armPx = gizmoArmPx(conicPx);
     return {
       shipId: ship.id,
       nodeId: node.id,
       dv: { ...node.dv },
       scene,
-      scale: gizmoScale(sp.depth, frame.camera),
+      scale: gizmoScale(sp.depth, frame.camera, armPx ?? GIZMO_MIN_ARM_PX),
       basis: localOrbitalBasis(a.pre, fallbackPole(world.system, a.parentId)),
       conicPx,
+      armPx,
     };
   }
 
@@ -305,11 +315,11 @@ export class NodeGizmo implements MapLayer {
   }
 
   /**
-   * Whether the selected node's gizmo is hidden because its conic is too small on screen
-   * (S5b-15): the node then can't be dragged, and its glyph's tooltip says to zoom in.
+   * Whether the selected node's gizmo is hidden because its planned path is too small on screen
+   * (decision 181): the node then can't be dragged, and its glyph's tooltip says to zoom in.
    */
   get tooSmall(): boolean {
-    return this.target !== null && this.target.conicPx < GIZMO_MIN_CONIC_PX;
+    return this.target !== null && this.target.armPx === null;
   }
 
   setHovered(h: GizmoHandle | null): void {
@@ -448,6 +458,7 @@ export class NodeGizmo implements MapLayer {
       nodeId: t.nodeId,
       visible: this.group.visible,
       conicPx: t.conicPx,
+      armPx: t.armPx,
       handles: GIZMO_HANDLES.map((h) => {
         const { dir, shown, occluded } = this.handles.get(h)!;
         const k = t.scale * CONE_AT;

@@ -9,10 +9,14 @@ import type { FrameCamera } from './mapFrame';
 import { projectScenePoint, type ScreenPoint } from './screenDash';
 import { anomalyAt, positionAtAnomaly, type ConicGeometry } from './trajectoryGeometry';
 
-/** Arm length on screen, px. */
+/** Arm length on screen, px, at full size. */
 export const GIZMO_ARM_PX = 60;
-/** The gizmo is shown only while the node's conic is at least this wide on screen (S5b-15). */
-export const GIZMO_MIN_CONIC_PX = 150;
+/** The shortest arm, px, just before the gizmo hides (decision 181). */
+export const GIZMO_MIN_ARM_PX = 20;
+/** At or above this width of the planned path on screen, px, the gizmo is full size (decision 181). */
+export const GIZMO_FULL_CONIC_PX = 150;
+/** Below this width of the planned path on screen, px, the gizmo is hidden (decision 181). */
+export const GIZMO_MIN_CONIC_PX = GIZMO_FULL_CONIC_PX / 4;
 /** Points sampled along an open conic's drawn piece to measure it. */
 const OPEN_SAMPLES = 32;
 /** The Δv change of a 100 px drag, km/s; the curve is cubic (S4-14). */
@@ -75,6 +79,18 @@ export function handleDirection(b: OrbitalBasis, h: GizmoHandle, out: Vec3): Vec
   out.y = sign * d.y;
   out.z = sign * d.z;
   return out;
+}
+
+/**
+ * The gizmo's arm length on screen for a planned path `conicPx` across (decision 181): full size
+ * at GIZMO_FULL_CONIC_PX and above, shrinking linearly to GIZMO_MIN_ARM_PX at GIZMO_MIN_CONIC_PX,
+ * and null (hidden) below that.
+ */
+export function gizmoArmPx(conicPx: number): number | null {
+  if (!(conicPx >= GIZMO_MIN_CONIC_PX)) return null;
+  if (conicPx >= GIZMO_FULL_CONIC_PX) return GIZMO_ARM_PX;
+  const f = (conicPx - GIZMO_MIN_CONIC_PX) / (GIZMO_FULL_CONIC_PX - GIZMO_MIN_CONIC_PX);
+  return GIZMO_MIN_ARM_PX + f * (GIZMO_ARM_PX - GIZMO_MIN_ARM_PX);
 }
 
 /** World units that span GIZMO_ARM_PX on screen at `depth` km in front of the camera. */

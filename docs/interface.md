@@ -86,7 +86,7 @@ The map is always 3D. There is no separate 2D planning view.
   - dashed: the planned path after maneuver nodes,
   - **thick and glowing: thrust arcs** (the engine on), with small direction ticks showing the steering,
   - a marker at each SOI transition
-- Markers, nodes and the gizmo behind a body's disc are drawn faint, without text. The node gizmo is shown only when the node's orbit is at least 150 px across; zoom in to drag it.
+- Markers, nodes and the gizmo behind a body's disc are drawn faint, without text. The node gizmo shrinks as the planned path after the node gets small on screen (from 60 px arms at 150 px across to 20 px at 37.5 px), and hides below that; zoom in to drag it.
 - **Stations** are drawn as icons, with a type glyph (habitat, refinery, depot, shipyard), on their fixed orbits or at their L-points.
 - **Reference frame:** trajectories are drawn relative to a **reference frame body**, separate from the camera's focus. A transfer to the Moon looks different in Earth-centred and Moon-centred frames. Selecting a body sets the frame to it, and selecting a ship sets it to the ship's parent; for the active ship the frame **follows** it into each new SOI. **Frame ▾** in the map toolbar lists the focus body and its parents, and the selected body, and sets a fixed frame.
 - **Markers** on trajectories: periapsis/apoapsis (Pe/Ap), ascending/descending node, SOI enter/exit, closest approach to the target (with distance and relative speed), entering or leaving a radiation belt, and impact.
