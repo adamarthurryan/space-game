@@ -31,7 +31,7 @@ The concept and architecture of the game are documented in the `docs` folder:
 - `architecture.md` — technical design (how it is built)
 - `interface.md` — UI design
 - `guides/` — entries in this folder are only for use use of human coders and reviewers - they are not a source of architectural truth 
-- `guides/ui-and-render.md` — guide to the code of the `ui/`, `render/` and `store/` layers as built
+- `guides/README.md` — index of the code guides, one per layer as built: `math.md`, `orbital.md`, `sim.md`, `gen.md`, `game.md`, `store.md`, `render.md`, `ui.md`, `content.md`
 - `decisions.md` — open questions and the decision log for all docs
 
 Development planning is in the `planning` folder:
