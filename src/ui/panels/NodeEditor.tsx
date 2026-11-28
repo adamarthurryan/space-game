@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { snapRefusal } from '../../game/actions';
 import { calendarFromJd, jdFromSimTime } from '../../math/time';
 import type { LocalDv } from '../../orbital/frames';
 import { useView } from '../../store/useView';
@@ -87,6 +88,8 @@ export function NodeEditor({
   const epoch = world.system.epochJd;
   const err = (r: { ok: boolean; error?: string }) => (r.ok ? null : (r.error ?? 'Refused'));
   const edit = (e: Parameters<typeof store.editNode>[2]) => err(store.editNode(shipId, nodeId, e));
+  // Snap is disabled on a circular orbit, with the reason (S5b-20).
+  const circular = snapRefusal(world, shipId, nodeId);
 
   return (
     <section aria-label="Node editor" className={styles['editor']}>
@@ -137,7 +140,8 @@ export function NodeEditor({
         <button
           type="button"
           className={styles['action']}
-          disabled={readOnly}
+          disabled={readOnly || circular !== null}
+          title={circular ?? undefined}
           onClick={() => store.snapNode(shipId, nodeId, 'periapsis')}
         >
           Snap to Pe
@@ -145,7 +149,8 @@ export function NodeEditor({
         <button
           type="button"
           className={styles['action']}
-          disabled={readOnly}
+          disabled={readOnly || circular !== null}
+          title={circular ?? undefined}
           onClick={() => store.snapNode(shipId, nodeId, 'apoapsis')}
         >
           Snap to Ap

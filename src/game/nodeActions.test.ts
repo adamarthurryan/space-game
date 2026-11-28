@@ -7,6 +7,7 @@ import { fallbackPole } from '../sim/maneuver';
 import { segmentStateAt } from '../sim/trajectory';
 import type { World } from '../sim/world';
 import {
+  addApsisRefusal,
   addNode,
   addNodeAt,
   deleteNode,
@@ -14,6 +15,7 @@ import {
   MAX_NODE_DV_COMPONENT,
   setPauseOn,
   snapNode,
+  snapRefusal,
   spawnShip,
 } from './actions';
 
@@ -150,14 +152,29 @@ describe('addNodeAt', () => {
     expect(addNodeAt(w, id, { t: 500 }).ok).toBe(true);
   });
 
-  it('refuses a passage that isn’t on the path', () => {
+  it('refuses Pe and Ap on a circular orbit (S5b-20), and a passage that isn’t on the path', () => {
     const w = world();
-    const r = addNodeAt(w, 'ship-1', 'periapsis'); // Kestrel's orbit is exactly circular
-    expect(!r.ok && r.error).toContain('No periapsis');
+    // Kestrel's orbit is exactly circular.
+    for (const k of ['periapsis', 'apoapsis'] as const) {
+      const r = addNodeAt(w, 'ship-1', k);
+      expect(!r.ok && r.error).toBe('Circular orbit');
+      expect(addApsisRefusal(w, 'ship-1', k)).toBe('Circular orbit');
+    }
+    expect(addApsisRefusal(w, 'ship-2', 'apoapsis')).toBeNull(); // Tern is elliptic
   });
 });
 
 describe('snapNode', () => {
+  it('refuses on a circular orbit (S5b-20)', () => {
+    const w = world();
+    addNode(w, 'ship-1', { t: 1000, dv: dv(0.1) });
+    expect(snapRefusal(w, 'ship-1', 'node-1')).toBe('Circular orbit');
+    const r = snapNode(w, 'ship-1', 'node-1', 'apoapsis');
+    expect(!r.ok && r.error).toBe('Circular orbit');
+    addNode(w, 'ship-2', { t: 1000, dv: dv(0.1) });
+    expect(snapRefusal(w, 'ship-2', 'node-1')).toBeNull();
+  });
+
   it('moves a node to the nearest periapsis of its path', () => {
     const w = world();
     const tern = w.ships['ship-2']!;

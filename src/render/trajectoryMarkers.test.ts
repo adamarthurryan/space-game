@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { norm, sub, vec3 } from '../math/vec3';
 import { MU_PLANET, PLANET_RADIUS, syntheticSystem } from '../sim/testSystem';
+import { timeToPassage } from '../orbital/passages';
 import { segmentStateAt, type Segment, type Trajectory } from '../sim/trajectory';
 import { conicGeometry } from './trajectoryGeometry';
 import { trajectoryMarkers } from './trajectoryMarkers';
@@ -98,5 +99,44 @@ describe('trajectoryMarkers', () => {
     expect(m.map((x) => x.kind)).toEqual(['periapsis', 'soi-exit']);
     expect(m[0]!.t).toBeCloseTo(0, 6);
     expect(m[1]!.text).toBe('▲ Star SOI');
+  });
+});
+
+describe('Pe/Ap markers agree with the passage search (F17, S5b-20)', () => {
+  /** A conic at rp with eccentricity e, starting at periapsis. */
+  function orbit(e: number): Trajectory {
+    const r = 7000;
+    const v = Math.sqrt((MU_PLANET * (1 + e)) / r);
+    const seg: Segment = {
+      kind: 'conic',
+      parentId: 'planet',
+      r0: vec3(r, 0, 0),
+      v0: vec3(0, v, 0),
+      tStart: 0,
+      tEnd: 1e7,
+      endEvent: 'horizon',
+    };
+    return { version: 1, key: '', segments: [seg] };
+  }
+  const markersOf = (tr: Trajectory) =>
+    trajectoryMarkers(sys, 'ship', tr, 10, 'planet', true, fmt).map((m) => m.kind);
+
+  it('draws no Pe or Ap on a circular orbit, where the passage search finds none', () => {
+    const tr = orbit(0);
+    const s = segmentStateAt(sys, tr.segments[0]!, 10);
+    expect(timeToPassage(MU_PLANET, s, 'apoapsis', vec3(0, 0, 1))).toBeNull();
+    expect(markersOf(tr)).not.toContain('apoapsis');
+    expect(markersOf(tr)).not.toContain('periapsis');
+  });
+
+  it('places the Ap marker at the passage time just above the threshold', () => {
+    const tr = orbit(2e-4);
+    const s = segmentStateAt(sys, tr.segments[0]!, 10);
+    const dt = timeToPassage(MU_PLANET, s, 'apoapsis', vec3(0, 0, 1));
+    expect(dt).not.toBeNull();
+    const ap = trajectoryMarkers(sys, 'ship', tr, 10, 'planet', true, fmt).find(
+      (m) => m.kind === 'apoapsis',
+    )!;
+    expect(Math.abs(ap.t - (10 + dt!))).toBeLessThan(1e-6);
   });
 });

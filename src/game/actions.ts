@@ -18,8 +18,9 @@ import {
   warpDown as clockWarpDown,
   warpUp as clockWarpUp,
 } from '../sim/clock';
+import { elementsFromState } from '../orbital/elements';
 import type { LocalDv } from '../orbital/frames';
-import { nearestPassage, timeToPassage, type PassageKind } from '../orbital/passages';
+import { hasApsides, nearestPassage, timeToPassage, type PassageKind } from '../orbital/passages';
 import { PAUSABLE_EVENTS, type PausableEvent } from '../sim/clock';
 import { fallbackPole, MAX_NODES, MIN_NODE_LEAD, type NodeId } from '../sim/maneuver';
 import { createShip, shipStats, type OrbitState, type Ship, type ShipId } from '../sim/ship';
@@ -203,9 +204,45 @@ function passageOnPath(
   return null;
 }
 
+/** The refusal for an apsis on a circular orbit (S5b-20). */
+export const CIRCULAR_ORBIT = 'Circular orbit';
+
+/** Whether a segment's conic is circular for its apsides (S5b-20). */
+function circular(world: World, seg: Segment): boolean {
+  const mu = world.system.bodies[seg.parentId]!.mu;
+  return !hasApsides(elementsFromState(mu, { r: seg.r0, v: seg.v0 }).e, 'periapsis');
+}
+
+/** Where "Add node ▾" searches from: after the last enabled node reached, or after now. */
+function addNodeFrom(world: World, ship: Ship, segments: readonly Segment[]): number {
+  const reached = new Set(segments.map((s) => s.endNodeId));
+  let tFrom = world.clock.t;
+  for (const n of ship.plan) if (n.enabled && reached.has(n.id)) tFrom = Math.max(tFrom, n.t);
+  return tFrom;
+}
+
+/**
+ * Why "At next Pe" or "At next Ap" can't be used on the ship's path, or null: the path is
+ * circular where the search starts (S5b-20). The menu disables the item with this reason.
+ */
+export function addApsisRefusal(
+  world: World,
+  shipId: ShipId,
+  kind: 'periapsis' | 'apoapsis',
+): string | null {
+  const ship = world.ships[shipId];
+  const segments = world.derived.trajectories[shipId]?.segments ?? [];
+  if (!ship) return null;
+  const tFrom = addNodeFrom(world, ship, segments);
+  const seg = segments.find((s) => s.tEnd > tFrom);
+  return seg && circular(world, seg) && passageOnPath(world, segments, kind, tFrom) === null
+    ? CIRCULAR_ORBIT
+    : null;
+}
+
 /**
  * Adds a node at the next passage of `at` on the planned path after the last enabled node (or
- * after now), or at a given time (S4-16).
+ * after now), or at a given time (S4-16). Pe and Ap are refused on a circular orbit (S5b-20).
  */
 export function addNodeAt(
   world: World,
@@ -216,12 +253,31 @@ export function addNodeAt(
   const ship = plannable(world, shipId);
   if (isFail(ship)) return ship;
   const segments = world.derived.trajectories[shipId]?.segments ?? [];
-  const reached = new Set(segments.map((s) => s.endNodeId));
-  let tFrom = world.clock.t;
-  for (const n of ship.plan) if (n.enabled && reached.has(n.id)) tFrom = Math.max(tFrom, n.t);
+  const tFrom = addNodeFrom(world, ship, segments);
   const t = passageOnPath(world, segments, at, tFrom);
-  if (t === null) return fail(`No ${PASSAGE_NAMES[at]} ahead on the path`);
+  if (t === null) {
+    if (at === 'periapsis' || at === 'apoapsis') {
+      const refusal = addApsisRefusal(world, shipId, at);
+      if (refusal) return fail(refusal);
+    }
+    return fail(`No ${PASSAGE_NAMES[at]} ahead on the path`);
+  }
   return addNode(world, shipId, { t });
+}
+
+/**
+ * Why a node can't be snapped to Pe or Ap, or null: the path it sits on is circular there
+ * (S5b-20). Read from the current trajectory: the segment that ends at the node, or (for a node
+ * not executed) the one containing it, which is the path without the node up to its time.
+ */
+export function snapRefusal(world: World, shipId: ShipId, nodeId: NodeId): string | null {
+  const node = world.ships[shipId]?.plan.find((n) => n.id === nodeId);
+  const segments = world.derived.trajectories[shipId]?.segments ?? [];
+  if (!node) return null;
+  const seg =
+    segments.find((s) => s.endNodeId === nodeId) ??
+    segments.find((s) => s.tStart <= node.t && node.t <= s.tEnd);
+  return seg && circular(world, seg) ? CIRCULAR_ORBIT : null;
 }
 
 /** Edits a node's time, Δv or enabled flag (S4-18). The plan is re-sorted. */
@@ -266,7 +322,7 @@ export function pathWithout(world: World, ship: Ship, nodeId: NodeId): Segment[]
   });
 }
 
-/** Moves a node to the nearest Pe or Ap of the path it sits on (S4-15). */
+/** Moves a node to the nearest Pe or Ap of the path it sits on (S4-15); not on a circular orbit (S5b-20). */
 export function snapNode(
   world: World,
   shipId: ShipId,
@@ -279,6 +335,7 @@ export function snapNode(
   if (!node) return fail(`Unknown node: ${nodeId}`);
   const seg = pathWithout(world, ship, nodeId).find((s) => s.tStart <= node.t && node.t <= s.tEnd);
   if (!seg) return fail('The node is not on the trajectory');
+  if (circular(world, seg)) return fail(CIRCULAR_ORBIT);
   const mu = world.system.bodies[seg.parentId]!.mu;
   const s = segmentStateAt(world.system, seg, node.t);
   const pole = nodePole(world, seg.parentId);

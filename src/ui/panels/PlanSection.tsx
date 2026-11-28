@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { addApsisRefusal } from '../../game/actions';
 import type { PassageKind } from '../../orbital/passages';
 import { useView } from '../../store/useView';
 import { useSimTime, useWorld } from '../../store/useWorld';
@@ -127,11 +128,27 @@ export function PlanSection({ shipId, readOnly = false }: { shipId: string; read
       >
         {(close) => (
           <div role="menu" aria-label="Add node" className={styles['menuItems']}>
-            {ADD.map((a) => (
-              <button key={a.at} type="button" role="menuitem" onClick={() => addAt(a.at, close)}>
-                {a.label}
-              </button>
-            ))}
+            {ADD.map((a) => {
+              // Pe and Ap are disabled on a circular orbit, with the reason (S5b-20).
+              const refusal =
+                a.at === 'periapsis' || a.at === 'apoapsis'
+                  ? addApsisRefusal(world, shipId, a.at)
+                  : null;
+              return (
+                <button
+                  key={a.at}
+                  type="button"
+                  role="menuitem"
+                  aria-label={a.label}
+                  disabled={refusal !== null}
+                  title={refusal ?? undefined}
+                  onClick={() => addAt(a.at, close)}
+                >
+                  {a.label}
+                  {refusal && <span className={styles['reason']}>{refusal}</span>}
+                </button>
+              );
+            })}
             {atTime === null ? (
               <button type="button" role="menuitem" onClick={() => setAtTime('')}>
                 At time T…

@@ -46,12 +46,19 @@ describe('PlanSection', () => {
     expect(plan()[0]!.t).toBeCloseTo(5400, 6);
   });
 
-  it('shows an error for a passage that isn’t there', () => {
+  it('disables At next Pe and Ap on a circular orbit, with the reason (S5b-20)', () => {
     useView.getState().activate('ship-1');
     render(<PlanSection shipId="ship-1" />); // Kestrel: circular
     fireEvent.click(screen.getByRole('button', { name: 'Add node ▾' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'At next Pe' }));
-    expect(screen.getByRole('alert').textContent).toContain('No periapsis');
+    for (const name of ['At next Pe', 'At next Ap']) {
+      const item = screen.getByRole('menuitem', { name }) as HTMLButtonElement;
+      expect(item.disabled).toBe(true);
+      expect(item.title).toBe('Circular orbit');
+      expect(item.textContent).toContain('Circular orbit');
+    }
+    expect(
+      (screen.getByRole('menuitem', { name: 'At next AN' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
   it('shows Δv left in red when over budget', () => {

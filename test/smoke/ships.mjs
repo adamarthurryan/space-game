@@ -222,7 +222,7 @@ async function run(page, check) {
   );
 
   // 6. Hover and click Kestrel's marker. Snap to its orbit first, so Earth can't hide it, and
-  // zoom out so the whole orbit (and so its Pe and Ap) is on screen.
+  // zoom out so the whole orbit is on screen.
   await keys(page, 'p');
   await until(async () => !(await camera(page)).animating, 2000);
   await wheel(page, 2);
@@ -247,8 +247,8 @@ async function run(page, check) {
     .filter((m) => m.shipId === 'ship-1')
     .map((m) => m.kind);
   check(
-    kinds.includes('periapsis') && kinds.includes('apoapsis'),
-    `6. Kestrel's Pe and Ap markers are placed (${kinds.join(', ')})`,
+    !kinds.includes('periapsis') && !kinds.includes('apoapsis'),
+    `6. Kestrel's circular orbit has no Pe or Ap markers (S5b-20) (${kinds.join(', ')})`,
   );
   await page.screenshot({ path: resolve(outDir, 'ships-kestrel.png') });
 }

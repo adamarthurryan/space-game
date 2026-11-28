@@ -149,6 +149,16 @@
   cursor: pointer;
 }
 
+.popover button:disabled {
+  color: var(--color-text-dim);
+  cursor: default;
+}
+
+.reason {
+  margin-left: 8px;
+  font-size: 11px;
+}
+
 .popover input {
   width: 8em;
 }

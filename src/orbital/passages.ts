@@ -10,6 +10,19 @@ import { meanFromTrue } from './kepler';
 
 export type PassageKind = 'periapsis' | 'apoapsis' | 'ascending-node' | 'descending-node';
 
+/**
+ * Below this eccentricity an orbit counts as circular for its apsides (S5b-20 in
+ * planning/sprint-5b.md): it has no Pe or Ap marker, passage or snap. Much coarser than
+ * elements.ts's CIRCULAR_E (1e-11), which only picks the conventions for ω and ν: at 1e-4 a low
+ * orbit's apsides differ in altitude by about a kilometre, too little to aim a burn at.
+ */
+export const APSIDES_MIN_E = 1e-4;
+
+/** Whether an orbit of eccentricity e has the apsis (S5b-20): not circular, and closed for Ap. */
+export function hasApsides(e: number, kind: 'periapsis' | 'apoapsis'): boolean {
+  return e >= APSIDES_MIN_E && (kind === 'periapsis' || e < 1);
+}
+
 /** Below this |pole × ĥ|, the orbit lies in the reference plane and has no nodes. */
 const IN_PLANE_SIN = 1e-9;
 
@@ -61,9 +74,9 @@ function conic(mu: number, s: StateVector): Conic {
 function targetAnomaly(c: Conic, kind: PassageKind, pole: Vec3): number | null {
   switch (kind) {
     case 'periapsis':
-      return c.e >= CIRCULAR_E ? 0 : null;
+      return hasApsides(c.e, 'periapsis') ? 0 : null;
     case 'apoapsis':
-      return c.elliptic && c.e >= CIRCULAR_E ? Math.PI : null;
+      return c.elliptic && hasApsides(c.e, 'apoapsis') ? Math.PI : null;
     case 'ascending-node':
     case 'descending-node': {
       const node = cross(pole, c.hHat);

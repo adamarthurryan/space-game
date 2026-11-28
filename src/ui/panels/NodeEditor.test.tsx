@@ -117,6 +117,16 @@ describe('NodeEditor', () => {
     expect(nodeId).toBe('node-1');
   });
 
+  it('disables Snap on a circular orbit (S5b-20)', () => {
+    setUp();
+    render(<Inspector />);
+    for (const name of ['Snap to Pe', 'Snap to Ap']) {
+      const b = screen.getByRole('button', { name }) as HTMLButtonElement;
+      expect(b.disabled).toBe(true);
+      expect(b.title).toBe('Circular orbit');
+    }
+  });
+
   it('snaps to apoapsis on an elliptic orbit', () => {
     // Tern (ship-2) is elliptic.
     const n = useWorld.getState().addNode('ship-2', { t: 1000 });
