@@ -49,6 +49,15 @@ export interface Preview {
   sticky: boolean;
 }
 
+/** How long a flash lasts, wall ms (S5b-11). */
+export const FLASH_MS = 2000;
+
+/** An object that flashes on the map until `until` (performance.now() ms, S5b-11). */
+export interface Flash {
+  ref: MapObjectRef;
+  until: number;
+}
+
 /** Tabs of the left sidebar. */
 export type LeftTab = 'system' | 'fleets' | 'stations' | 'routes';
 
@@ -75,6 +84,8 @@ interface ViewState {
   spawnFormOpen: boolean;
   /** The preview, or null when the map shows now (S5-9). */
   preview: Preview | null;
+  /** The object flashing on the map, e.g. a ship just spawned (S5b-11). */
+  flash: Flash | null;
   toggleLeftPanel(): void;
   toggleRightPanel(): void;
   setLeftTab(tab: LeftTab): void;
@@ -87,6 +98,8 @@ interface ViewState {
   activate(id: ShipId): void;
   /** A fixed body frame (Frame ▾, S5b-4): stops following. */
   setFrame(id: BodyId): void;
+  /** Flashes an object for FLASH_MS of wall time (S5b-11). */
+  flashObject(ref: MapObjectRef): void;
   snapTo(plane: SnapPlane): void;
   toggleExpanded(id: BodyId): void;
   setSpawnFormOpen(open: boolean): void;
@@ -137,6 +150,7 @@ export const useView = create<ViewState>()((set) => ({
   expanded: { sun: true },
   spawnFormOpen: false,
   preview: null,
+  flash: null,
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftTab: (tab) => set({ leftTab: tab }),
@@ -153,6 +167,7 @@ export const useView = create<ViewState>()((set) => ({
         : s,
     ),
   setFrame: (id) => set({ frame: { kind: 'body', id } }),
+  flashObject: (ref) => set({ flash: { ref, until: performance.now() + FLASH_MS } }),
   setHovered: (ref) => set({ hovered: ref }),
   focusOn: (ref) =>
     set((s) => ({

@@ -3,7 +3,7 @@ import { getBody } from '../../sim/body';
 import { useWorld } from '../../store/useWorld';
 import { shipColor } from '../shipStyle';
 import styles from './LabelOverlay.module.css';
-import type { LabelRegistry } from './labelLayout';
+import { attachLabelContainer, type LabelRegistry } from './labelLayout';
 
 /**
  * The DOM label layer over the canvas (S2-15, S3-20): one span per body and per drawn ship, with
@@ -23,7 +23,12 @@ export function LabelOverlay({ registry, order }: { registry: LabelRegistry; ord
     [world, version],
   );
   return (
-    <div className={styles['overlay']} aria-hidden="true" data-testid="label-overlay">
+    <div
+      className={styles['overlay']}
+      aria-hidden="true"
+      data-testid="label-overlay"
+      ref={(el) => attachLabelContainer(registry, el)}
+    >
       {order.map((id, i) => (
         <span
           key={id}

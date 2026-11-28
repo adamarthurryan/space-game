@@ -50,6 +50,8 @@ export interface ViewSnapshot {
   activeShipId: ShipId | null;
   /** Whether the map is drawn at a preview time, not now: map editing is off (S5-11). */
   previewing: boolean;
+  /** The object flashing, and the wall seconds since the flash began (S5b-11); null if none. */
+  flash: { ref: MapObjectRef; elapsed: number } | null;
 }
 
 /** One kind of object on the map, as a plain three.js layer. */
@@ -106,6 +108,6 @@ export function labelsStage(
   measureLabels(reg);
   updateLabelCandidates(reg, frame, world.system, view);
   updateShipLabelCandidates(reg, frame, world, view);
-  placeLabels(reg, frame);
+  placeLabels(reg, frame, world, view);
   placeTrajectoryMarkers(markers, frame, world, view);
 }

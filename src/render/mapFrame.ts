@@ -36,10 +36,16 @@ export interface Rect {
   h: number;
 }
 
-/** A label placed by the declutter pass (step 6), kept for picking. */
+/**
+ * A label placed by the declutter pass (step 6), kept for picking. A merged label (S5b-16) is
+ * one PlacedLabel per name, each its own pick target; the body's part lists every name's ref in
+ * `parts`.
+ */
 export interface PlacedLabel {
   ref: FocusRef;
   rect: Rect;
+  /** On the first part of a merged label: the refs of all its names, in order (S5b-16). */
+  parts?: FocusRef[];
 }
 
 export interface MapFrame {

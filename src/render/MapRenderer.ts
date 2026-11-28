@@ -8,7 +8,7 @@
 
 import { ACESFilmicToneMapping, Color, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import type { World } from '../sim/world';
-import { resolveActiveShip, useView } from '../store/useView';
+import { FLASH_MS, resolveActiveShip, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { CameraStage } from './camera/CameraStage';
 import { FOV_DEG } from './camera/framing';
@@ -160,7 +160,8 @@ export class MapRenderer {
 
   /** The view for this frame, at the time the map is drawn at (S5-10). */
   private readView(world: World): ViewSnapshot {
-    const { focus, frame, selected, hovered, activeShipId, preview } = useView.getState();
+    const { focus, frame, selected, hovered, activeShipId, preview, flash } = useView.getState();
+    const left = flash ? flash.until - performance.now() : 0;
     return {
       focus,
       selected,
@@ -168,6 +169,7 @@ export class MapRenderer {
       frameBodyId: resolveFrameBody(world, frame, viewTime(world.clock.t, preview)),
       activeShipId: resolveActiveShip(world, activeShipId),
       previewing: preview !== null,
+      flash: flash && left > 0 ? { ref: flash.ref, elapsed: (FLASH_MS - left) / 1000 } : null,
     };
   }
 

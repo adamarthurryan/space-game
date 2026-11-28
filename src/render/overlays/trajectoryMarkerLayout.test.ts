@@ -40,6 +40,7 @@ describe('trajectory markers behind a disc (S5b-14)', () => {
       frameBodyId: 'earth',
       activeShipId: null,
       previewing: false,
+      flash: null,
     };
     placeTrajectoryMarkers(reg, f, world, view);
     const placed = (kind: string) =>

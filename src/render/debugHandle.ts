@@ -11,7 +11,7 @@ import { useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { controllerPose, type CameraController } from './camera/controller';
 import type { TrajectoryLayer } from './layers/TrajectoryLayer';
-import type { MapFrame } from './mapFrame';
+import { resolveFrameBody, type MapFrame } from './mapFrame';
 import { viewTime } from './previewTime';
 import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 
@@ -67,7 +67,28 @@ function createProbes() {
     },
     /** The labels placed this frame. */
     labels() {
-      return frame().labels.map((l) => ({ id: l.ref.id, kind: l.ref.kind, ...l.rect }));
+      return frame().labels.map((l) => ({
+        id: l.ref.id,
+        kind: l.ref.kind,
+        ...l.rect,
+        // The names of a merged label, on its first part (S5b-16).
+        ...(l.parts ? { parts: l.parts.map((p) => p.id) } : {}),
+      }));
+    },
+    /** The reference frame and the body it resolves to at the view time (S5b-1). */
+    frame() {
+      const { world } = useWorld.getState();
+      const v = useView.getState();
+      return {
+        ref: v.frame,
+        bodyId: resolveFrameBody(world, v.frame, viewTime(world.clock.t, v.preview)),
+      };
+    },
+    /** The object flashing, and the wall ms left, or null (S5b-11). */
+    flash() {
+      const f = useView.getState().flash;
+      const left = f ? f.until - performance.now() : 0;
+      return f && left > 0 ? { ref: f.ref, left } : null;
     },
     /** A drawn ship's projection (S3-22); null if it isn't drawn (destroyed). */
     ship(id: string) {

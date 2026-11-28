@@ -17,3 +17,37 @@
   visibility: hidden;
   will-change: transform;
 }
+
+/* The names of a merged label (S5b-16): "Earth · Kestrel, Tern +2". The separators sit in the
+   gap before each name, outside its measured width. */
+.partFirst::before,
+.partNext::before {
+  position: absolute;
+  color: var(--color-text-dim);
+}
+
+.partFirst::before {
+  content: '·';
+  left: -7px;
+}
+
+.partNext::before {
+  content: ',';
+  left: -8px;
+}
+
+.more {
+  color: var(--color-text-dim);
+}
+
+/* A ship just spawned pulses for 2 s (S5b-11). */
+.flash {
+  animation: flash 0.5s ease-in-out 4;
+}
+
+@keyframes flash {
+  50% {
+    text-shadow: 0 0 6px currentcolor;
+    transform-origin: left center;
+  }
+}
