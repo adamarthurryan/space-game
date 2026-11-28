@@ -3,6 +3,7 @@ import type { PassageKind } from '../../orbital/passages';
 import { useView } from '../../store/useView';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import { formatCountdown, formatSpeed } from '../format';
+import { Popover } from '../layout/Popover';
 import { parseDuration } from '../parse';
 import styles from './Plan.module.css';
 import { planDetails } from './planDetails';
@@ -20,7 +21,6 @@ export function PlanSection({ shipId }: { shipId: string }) {
   useWorld((s) => s.version);
   const now = useSimTime();
   const selected = useView((s) => s.selected);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [atTime, setAtTime] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ship = world.ships[shipId];
@@ -28,9 +28,12 @@ export function PlanSection({ shipId }: { shipId: string }) {
   const d = planDetails(world, shipId, now);
   const { select } = useView.getState();
 
-  const added = (r: { ok: true; value: string } | { ok: false; error: string }) => {
+  const added = (
+    r: { ok: true; value: string } | { ok: false; error: string },
+    close: () => void,
+  ) => {
     if (r.ok) {
-      setMenuOpen(false);
+      close();
       setAtTime(null);
       setError(null);
       select({ kind: 'node', shipId, id: r.value });
@@ -38,11 +41,12 @@ export function PlanSection({ shipId }: { shipId: string }) {
       setError(r.error);
     }
   };
-  const addAt = (at: PassageKind) => added(useWorld.getState().addNodeAt(shipId, at));
-  const addAtTime = () => {
+  const addAt = (at: PassageKind, close: () => void) =>
+    added(useWorld.getState().addNodeAt(shipId, at), close);
+  const addAtTime = (close: () => void) => {
     const dt = parseDuration(atTime ?? '');
     if (dt === null) return setError('Use a duration such as 1d 2h 30m');
-    added(useWorld.getState().addNodeAt(shipId, { t: now + dt }));
+    added(useWorld.getState().addNodeAt(shipId, { t: now + dt }), close);
   };
 
   return (
@@ -84,19 +88,17 @@ export function PlanSection({ shipId }: { shipId: string }) {
           {formatSpeed(Math.abs(d.dvLeft))}
         </dd>
       </dl>
-      <div className={styles['menu']}>
-        <button
-          type="button"
-          className={styles['action']}
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(!menuOpen)}
-        >
-          Add node ▾
-        </button>
-        {menuOpen && (
-          <div role="menu" aria-label="Add node" className={styles['popover']}>
+      <Popover
+        label="Add node ▾"
+        className={styles['menu']}
+        buttonClassName={styles['action']}
+        panelClassName={styles['popover']}
+        onClose={() => setAtTime(null)}
+      >
+        {(close) => (
+          <div role="menu" aria-label="Add node" className={styles['menuItems']}>
             {ADD.map((a) => (
-              <button key={a.at} type="button" role="menuitem" onClick={() => addAt(a.at)}>
+              <button key={a.at} type="button" role="menuitem" onClick={() => addAt(a.at, close)}>
                 {a.label}
               </button>
             ))}
@@ -108,7 +110,7 @@ export function PlanSection({ shipId }: { shipId: string }) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  addAtTime();
+                  addAtTime(close);
                 }}
               >
                 <label>
@@ -125,7 +127,7 @@ export function PlanSection({ shipId }: { shipId: string }) {
             )}
           </div>
         )}
-      </div>
+      </Popover>
       {error && (
         <p className={styles['warning']} role="alert">
           {error}

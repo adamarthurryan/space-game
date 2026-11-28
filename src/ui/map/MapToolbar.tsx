@@ -1,8 +1,13 @@
 import { focusRefOf, useView } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
+import { FlyButton } from './FlyButton';
+import { FrameMenu } from './FrameMenu';
 import styles from './MapToolbar.module.css';
 
-/** Snap and focus buttons over the map (S2-12, S2-20), with their keys. */
+/**
+ * The map toolbar: snap and focus buttons (S2-12, S2-20), with their keys; Frame ▾ (S5b-4) and
+ * Fly (S5b-7).
+ */
 export function MapToolbar() {
   const selected = useView((s) => s.selected);
   const world = useWorld((s) => s.world);
@@ -44,6 +49,8 @@ export function MapToolbar() {
       >
         Focus<span className={styles['key']}>F</span>
       </button>
+      <FrameMenu />
+      <FlyButton />
     </div>
   );
 }

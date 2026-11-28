@@ -32,3 +32,39 @@
   font-size: 11px;
   opacity: 0.7;
 }
+
+.fly {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.flown[aria-pressed='true'] {
+  color: var(--color-text);
+}
+
+.flown:disabled {
+  opacity: 0.7;
+}
+
+.menu {
+  display: grid;
+  min-width: 10em;
+  padding: 4px;
+}
+
+.menuItem {
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem[aria-checked='true']::before {
+  content: '✓ ';
+}
+
+.menuItem:hover {
+  background: var(--color-panel);
+}

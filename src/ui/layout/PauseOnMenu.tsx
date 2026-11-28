@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { PAUSABLE_EVENTS, type PausableEvent } from '../../sim/clock';
 import { useWorld } from '../../store/useWorld';
+import { Popover } from './Popover';
 import styles from './Timeline.module.css';
 
 const LABELS: Record<PausableEvent, string> = {
@@ -14,24 +14,19 @@ export function PauseOnMenu() {
   useWorld((s) => s.version);
   const world = useWorld((s) => s.world);
   const { setPauseOn } = useWorld.getState();
-  const [open, setOpen] = useState(false);
   const pauseOn = world.clock.pauseOn;
   const all = PAUSABLE_EVENTS.every((k) => pauseOn[k]);
   const some = PAUSABLE_EVENTS.some((k) => pauseOn[k]);
 
   return (
-    <div className={styles['pauseOn']}>
-      <button
-        type="button"
-        className={styles['button']}
-        aria-expanded={open}
-        aria-haspopup="true"
-        onClick={() => setOpen(!open)}
-      >
-        Pause on ▾
-      </button>
-      {open && (
-        <fieldset className={styles['pauseMenu']} aria-label="Pause on">
+    <Popover
+      label="Pause on ▾"
+      className={styles['pauseOn']}
+      buttonClassName={styles['button']}
+      panelClassName={styles['pauseMenu']}
+    >
+      {() => (
+        <fieldset className={styles['pauseFields']} aria-label="Pause on">
           {PAUSABLE_EVENTS.map((k) => (
             <label key={k}>
               <input
@@ -55,6 +50,6 @@ export function PauseOnMenu() {
           </label>
         </fieldset>
       )}
-    </div>
+    </Popover>
   );
 }
