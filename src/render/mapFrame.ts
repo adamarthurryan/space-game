@@ -11,6 +11,7 @@ import type { ShipId } from '../sim/ship';
 import { shipBodyAt, shipPointAt, type World } from '../sim/world';
 import type { NodeId } from '../sim/maneuver';
 import type { FocusRef, FrameRef } from '../store/useView';
+import type { EncounterGhost } from './encounterGhosts';
 import type { ProjectedPolyline } from './pathPicking';
 
 /** The camera of this frame, relative to the origin: position and orthonormal basis. */
@@ -86,6 +87,8 @@ export interface MapFrame {
   nodes: PlacedNode[];
   /** The ghost node under the pointer, if any (pointer input, S4-12). */
   ghost: Ghost | null;
+  /** The bodies at their SOI entries this frame (layers stage, S5b-13). */
+  encounters: EncounterGhost[];
 }
 
 /** A node glyph on screen. */
@@ -172,6 +175,7 @@ export function createMapFrame(system: BodySystem): MapFrame {
     paths: [],
     nodes: [],
     ghost: null,
+    encounters: [],
   };
 }
 

@@ -30,8 +30,11 @@ interface MarkerSpan {
   height: number;
 }
 
-/** What a placed glyph is: a trajectory marker, a node, or the ghost node (S4-9, S4-12). */
-export type MarkerKind = TrajectoryMarker['kind'] | 'node' | 'ghost';
+/**
+ * What a placed glyph is: a trajectory marker, a node, the ghost node (S4-9, S4-12), or a body
+ * at an SOI entry (S5b-13).
+ */
+export type MarkerKind = TrajectoryMarker['kind'] | 'node' | 'ghost' | 'encounter';
 
 /** A marker placed this frame, for the debug handle. */
 export interface PlacedMarker {
@@ -108,6 +111,8 @@ function glyphFor(kind: MarkerKind): string {
       return '◆';
     case 'ghost':
       return '◇';
+    case 'encounter':
+      return '○';
     default:
       return '▲';
   }
@@ -145,6 +150,20 @@ export function placeTrajectoryMarkers(
 ): void {
   const fb = frame.indexOf[view.frameBodyId];
   const items: Item[] = [];
+  // The bodies at their SOI entries (S5b-13): hollow, labelled, in the frame like the path.
+  // First, so their texts win over the SOI markers' at the same point.
+  const fbWorld = frameWorldInto(frame, fb ?? 0, { x: 0, y: 0, z: 0 });
+  for (const g of frame.encounters) {
+    const ship = world.ships[g.shipId];
+    items.push({
+      kind: 'encounter',
+      shipId: g.shipId,
+      pos: { x: g.world.x - fbWorld.x, y: g.world.y - fbWorld.y, z: g.world.z - fbWorld.z },
+      text: `${getBody(world.system, g.bodyId).name} at entry`,
+      color: ship ? shipColor(ship.seq) : '',
+      glyphClass: cls('glyph', 'encounter'),
+    });
+  }
   if (fb !== undefined) {
     for (const id of frame.ships.ids) {
       const traj = world.derived.trajectories[id];
@@ -244,6 +263,7 @@ export function placeTrajectoryMarkers(
       glyph.className = m.glyphClass;
       glyph.style.color = m.color ?? '';
       span.text.textContent = m.text.replace(/^[▲✕] /, '');
+      span.text.style.color = m.kind === 'encounter' ? (m.color ?? '') : '';
       span.textKey = key;
       span.width = span.text.offsetWidth;
       span.height = span.text.offsetHeight;

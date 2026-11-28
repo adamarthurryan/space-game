@@ -16,6 +16,7 @@ import { registerDebug } from './debugHandle';
 import { attachCameraInput } from './input/cameraInput';
 import { attachPointerInput } from './input/pointerInput';
 import { BodyLayer } from './layers/BodyLayer';
+import { EncounterGhostLayer } from './layers/EncounterGhostLayer';
 import { MarkerLayer } from './layers/MarkerLayer';
 import { NodeGizmo } from './NodeGizmo';
 import { OrbitLayer } from './layers/OrbitLayer';
@@ -92,6 +93,7 @@ export class MapRenderer {
       new BodyLayer(this.scene, frame, world.system),
       new OrbitLayer(this.scene, frame, world.system),
       trajectories,
+      new EncounterGhostLayer(this.scene),
       new MarkerLayer(this.scene, frame, world.system),
       this.gizmo,
     ];

@@ -71,3 +71,9 @@
 .dimmed {
   opacity: 0.3;
 }
+
+/* A body at an SOI entry (S5b-13): a hollow marker in the ship's colour. */
+.encounter {
+  font-size: 12px;
+  line-height: 12px;
+}

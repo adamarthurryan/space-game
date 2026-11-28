@@ -13,6 +13,7 @@ import { controllerPose, type CameraController } from './camera/controller';
 import type { TrajectoryLayer } from './layers/TrajectoryLayer';
 import { resolveFrameBody, type MapFrame } from './mapFrame';
 import { viewTime } from './previewTime';
+import { projectScenePoint } from './screenDash';
 import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 
 interface DebugSources {
@@ -83,6 +84,27 @@ function createProbes() {
         ref: v.frame,
         bodyId: resolveFrameBody(world, v.frame, viewTime(world.clock.t, v.preview)),
       };
+    },
+    /** The bodies at their SOI entries drawn this frame, with their screen points (S5b-13). */
+    encounterGhosts() {
+      const f = frame();
+      const sp = { x: 0, y: 0, depth: 0 };
+      return f.encounters.map((g) => {
+        projectScenePoint(
+          f.camera,
+          g.world.x - f.origin.x,
+          g.world.y - f.origin.y,
+          g.world.z - f.origin.z,
+          sp,
+        );
+        const marker = sources.markers?.placed.find(
+          (m) =>
+            m.kind === 'encounter' &&
+            m.shipId === g.shipId &&
+            Math.hypot(m.x - sp.x, m.y - sp.y) < 1,
+        );
+        return { ...g, world: { ...g.world }, x: sp.x, y: sp.y, text: marker?.text ?? null };
+      });
     },
     /** The object flashing, and the wall ms left, or null (S5b-11). */
     flash() {
