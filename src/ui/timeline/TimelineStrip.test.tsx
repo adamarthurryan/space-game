@@ -74,4 +74,12 @@ describe('TimelineStrip', () => {
     act(() => useView.getState().startPreview(5000, true));
     expect(document.querySelector('[data-sticky="true"]')).not.toBeNull();
   });
+
+  it('shades the strip past the end of the prediction (S5b-24)', () => {
+    setUpLunar();
+    render(<TimelineStrip />);
+    const beyond = screen.getByTestId('beyond-prediction');
+    const horizon = screen.getByTitle('End of prediction');
+    expect(beyond.style.left).toBe(horizon.style.left);
+  });
 });

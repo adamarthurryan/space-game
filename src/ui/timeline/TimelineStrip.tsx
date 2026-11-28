@@ -4,7 +4,7 @@ import { upcomingEvents, type UpcomingEvent } from '../../sim/upcoming';
 import { resolveActiveShip, useView } from '../../store/useView';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import { eventTooltip } from './eventText';
-import { dtOf, stripSpan, stripTicks, xOf, type StripScale } from './scale';
+import { dtOf, stripScale, stripTicks, xOf, type StripScale } from './scale';
 import { stripGlyphs } from './stripLayout';
 import styles from './TimelineStrip.module.css';
 
@@ -32,7 +32,8 @@ function useWidth(el: HTMLElement | null): number {
  * The timeline strip (decisions S5-6 to S5-9 in planning/sprint-5.md): the active ship's upcoming
  * events on a logarithmic axis from now, with hover details. Pressing on the strip previews the
  * time under the pointer until release; clicking an event keeps the preview there until Esc or
- * Now.
+ * Now. The axis spans a fixed 10 years, so its ticks never move, and the time past the active
+ * ship's prediction is shaded (S5b-23, S5b-24 in planning/sprint-5b.md).
  */
 export function TimelineStrip() {
   useWorld((s) => s.version);
@@ -48,7 +49,7 @@ export function TimelineStrip() {
 
   const shipId = resolveActiveShip(world, activeShipId);
   const upcoming = shipId ? upcomingEvents(world, shipId) : { events: [], horizon: null };
-  const scale: StripScale = { span: stripSpan(upcoming.horizon, now), width };
+  const scale: StripScale = stripScale(width);
   const selectedNodeId = selected?.kind === 'node' ? selected.id : null;
   const colorOf = (id: string) => shipColor(world.ships[id]?.seq ?? 0);
   const { glyphs, overflow } = stripGlyphs(upcoming.events, scale, now, colorOf, selectedNodeId);
@@ -100,17 +101,25 @@ export function TimelineStrip() {
       onPointerCancel={onPointerUp}
     >
       {ticks.map((t) => (
-        <span key={t.label} className={styles['tick']} style={{ left: t.x }}>
+        <span key={t.label} className={styles['tick']} style={{ left: t.x }} data-tick={t.label}>
           <span className={styles['tickLabel']}>{t.label}</span>
         </span>
       ))}
       <span className={styles['now']} aria-hidden="true" />
       {horizonDt !== null && horizonDt <= scale.span && (
-        <span
-          className={styles['horizon']}
-          style={{ left: xOf(scale, horizonDt) }}
-          title="End of prediction"
-        />
+        <>
+          <span
+            className={styles['beyond']}
+            style={{ left: xOf(scale, horizonDt) }}
+            data-testid="beyond-prediction"
+            aria-hidden="true"
+          />
+          <span
+            className={styles['horizon']}
+            style={{ left: xOf(scale, horizonDt) }}
+            title="End of prediction"
+          />
+        </>
       )}
       {glyphs.map((g) => {
         const label = eventTooltip(world.system, g.event, now);

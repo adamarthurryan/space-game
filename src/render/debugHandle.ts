@@ -199,7 +199,7 @@ function createProbes() {
     elapsedVertices(id: string) {
       return sources.trajectories?.elapsedCounts.get(id) ?? [];
     },
-    /** The timeline strip: its span and box, and each glyph's event and centre (S5-15). */
+    /** The timeline strip: its span and box, each glyph's event and centre (S5-15), the ticks. */
     timeline() {
       const strip = document.querySelector<HTMLElement>('[aria-label="Timeline strip"]');
       if (!strip) return null;
@@ -216,10 +216,18 @@ function createProbes() {
           };
         },
       );
+      const ticks = Array.from(strip.querySelectorAll<HTMLElement>('[data-tick]')).map((el) => ({
+        label: el.dataset['tick'],
+        x: el.getBoundingClientRect().left,
+      }));
+      const beyond = strip.querySelector<HTMLElement>('[data-testid="beyond-prediction"]');
       return {
         span: Number(strip.dataset['span']),
         box: { left: box.left, top: box.top, width: box.width, height: box.height },
         glyphs,
+        // The fixed ticks (S5b-23), and where the shading past the prediction starts (S5b-24).
+        ticks,
+        beyondX: beyond ? beyond.getBoundingClientRect().left : null,
       };
     },
     /** The preview and the time the map is drawn at, or null (S5-15). */

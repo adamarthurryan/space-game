@@ -43,6 +43,16 @@
   pointer-events: none;
 }
 
+/* Past the active ship's prediction (S5b-24): shaded to the right edge. */
+.beyond {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, rgb(0 0 0 / 35%) 0 4px, rgb(0 0 0 / 15%) 4px 8px);
+  pointer-events: none;
+}
+
 .horizon {
   position: absolute;
   top: 4px;
