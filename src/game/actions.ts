@@ -23,6 +23,15 @@ import type { LocalDv } from '../orbital/frames';
 import { hasApsides, nearestPassage, timeToPassage, type PassageKind } from '../orbital/passages';
 import { PAUSABLE_EVENTS, type PausableEvent } from '../sim/clock';
 import { fallbackPole, MAX_NODES, MIN_NODE_LEAD, type NodeId } from '../sim/maneuver';
+import {
+  assignShip as simAssignShip,
+  checkFleetName,
+  createFleet as simCreateFleet,
+  defaultFleetName,
+  deleteFleet as simDeleteFleet,
+  renameFleet as simRenameFleet,
+  type FleetId,
+} from '../sim/fleet';
 import { createShip, shipStats, type OrbitState, type Ship, type ShipId } from '../sim/ship';
 import { computeTrajectory, segmentStateAt, type Segment } from '../sim/trajectory';
 import {
@@ -64,6 +73,8 @@ export interface SpawnShipParams {
   /** Default: `<Design> <seq>`. */
   name?: string;
   orbit: OrbitState;
+  /** The fleet to put it in (S6-4); default Unassigned. */
+  fleetId?: FleetId | null;
 }
 
 /**
@@ -86,10 +97,13 @@ export function spawnShip(world: World, p: SpawnShipParams): ActionResult<ShipId
   if (norm(r) >= soi) {
     return { ok: false, error: `The start is outside ${body.name}'s sphere of influence` };
   }
+  if (p.fleetId && !world.fleets[p.fleetId])
+    return { ok: false, error: `Unknown fleet: ${p.fleetId}` };
   const seq = world.nextShipSeq;
   const id = `ship-${seq}`;
   const name = p.name?.trim() || `${design.name} ${seq}`;
   addShip(world, createShip(id, seq, name, design, p.orbit));
+  if (p.fleetId) simAssignShip(world, id, p.fleetId);
   return { ok: true, value: id };
 }
 
@@ -396,5 +410,37 @@ export function warpToNextEvent(world: World, shipId: ShipId | null): ActionResu
 export function cancelWarpTo(world: World): ActionResult {
   if (!world.clock.warpTo) return fail('No warp-to in progress');
   cancelClockWarpTo(world.clock);
+  return ok();
+}
+
+// ---- Fleets (decisions S6-1 and S6-2 in planning/sprint-6.md) ------------------------------
+
+/** Adds a fleet; with no name, "Fleet <n>". */
+export function createFleet(world: World, name?: string): ActionResult<FleetId> {
+  const check = checkFleetName(world, name ?? defaultFleetName(world));
+  if (!check.ok) return check;
+  return { ok: true, value: simCreateFleet(world, check.name) };
+}
+
+export function renameFleet(world: World, id: FleetId, name: string): ActionResult {
+  if (!world.fleets[id]) return fail(`Unknown fleet: ${id}`);
+  const check = checkFleetName(world, name, id);
+  if (!check.ok) return check;
+  simRenameFleet(world, id, check.name);
+  return ok();
+}
+
+/** Deletes a fleet: its ships move to Unassigned, and its fleet alarms are deleted (S6-2). */
+export function deleteFleet(world: World, id: FleetId): ActionResult {
+  if (!world.fleets[id]) return fail(`Unknown fleet: ${id}`);
+  simDeleteFleet(world, id);
+  return ok();
+}
+
+/** Moves a ship to a fleet, or to Unassigned with null. Destroyed ships can be moved. */
+export function assignShip(world: World, shipId: ShipId, fleetId: FleetId | null): ActionResult {
+  if (!world.ships[shipId]) return fail(`Unknown ship: ${shipId}`);
+  if (fleetId !== null && !world.fleets[fleetId]) return fail(`Unknown fleet: ${fleetId}`);
+  simAssignShip(world, shipId, fleetId);
   return ok();
 }

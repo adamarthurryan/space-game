@@ -13,6 +13,7 @@ import type { Vec3 } from '../math/vec3';
 import type { StateVector } from '../orbital/elements';
 import { propagateInto } from '../orbital/propagate';
 import { getBody, type BodyId, type BodySystem } from './body';
+import type { FleetId } from './fleet';
 import type { ManeuverNode } from './maneuver';
 
 export type ShipId = string;
@@ -46,6 +47,8 @@ export interface Ship {
   orbit: OrbitState;
   /** Maneuver nodes, sorted by t (S4-1). */
   plan: ManeuverNode[];
+  /** The ship's fleet, or null for Unassigned (S6-1 in planning/sprint-6.md). */
+  fleetId: FleetId | null;
 }
 
 const cloneOrbit = (o: OrbitState): OrbitState => ({
@@ -83,6 +86,7 @@ export function createShip(
     status: 'coasting',
     orbit: cloneOrbit(orbit),
     plan: [],
+    fleetId: null,
   };
 }
 

@@ -13,6 +13,7 @@ import {
   type EventRegistry,
   type SimEvent,
 } from './events';
+import type { Fleet, FleetId } from './fleet';
 import type { Ship, ShipId } from './ship';
 import type { StateVector } from '../orbital/elements';
 import {
@@ -30,6 +31,9 @@ export interface World {
   nextShipSeq: number;
   /** The next node's number: IDs are `node-<n>`, unique across ships (S4-1). */
   nextNodeSeq: number;
+  /** Fleets by ID, in seq order (S6-1 in planning/sprint-6.md). */
+  fleets: Record<FleetId, Fleet>;
+  nextFleetSeq: number;
   /** Rebuildable from the rest; not saved (S3-11). */
   derived: Derived;
 }
@@ -53,6 +57,8 @@ export function createWorld(system: BodySystem, t = 0): World {
     ships: {},
     nextShipSeq: 1,
     nextNodeSeq: 1,
+    fleets: {},
+    nextFleetSeq: 1,
     derived: emptyDerived(),
   };
 }
