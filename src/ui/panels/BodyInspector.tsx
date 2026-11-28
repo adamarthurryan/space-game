@@ -37,7 +37,7 @@ export function BodyInspector() {
   const selected = useView((s) => s.selected);
   const system = useWorld((s) => s.world.system);
   const t = useSimTime();
-  if (!selected || !system.bodies[selected.id]) {
+  if (!selected || selected.kind !== 'body' || !system.bodies[selected.id]) {
     return <p className={styles['empty']}>Nothing selected</p>;
   }
 

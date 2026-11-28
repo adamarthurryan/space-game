@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createSandboxWorld } from '../gen/scenario';
 import * as actions from '../game/actions';
-import type { ActionResult, SpawnShipParams } from '../game/actions';
+import type { ActionResult, NodeEdit, SpawnShipParams } from '../game/actions';
+import type { LocalDv } from '../orbital/frames';
+import type { PassageKind } from '../orbital/passages';
+import type { PausableEvent } from '../sim/clock';
+import type { NodeId } from '../sim/maneuver';
 import { createEventRegistry, registerShipHandlers, type EventRegistry } from '../sim/events';
 import type { ShipId } from '../sim/ship';
 import type { World } from '../sim/world';
@@ -28,6 +32,12 @@ interface WorldState {
   warpDown(): ActionResult;
   setWarpIndex(i: number): ActionResult;
   spawnShip(p: SpawnShipParams): ActionResult<ShipId>;
+  addNode(shipId: ShipId, p: { t: number; dv?: LocalDv }): ActionResult<NodeId>;
+  addNodeAt(shipId: ShipId, at: PassageKind | { t: number }): ActionResult<NodeId>;
+  editNode(shipId: ShipId, nodeId: NodeId, edit: NodeEdit): ActionResult;
+  deleteNode(shipId: ShipId, nodeId: NodeId): ActionResult;
+  snapNode(shipId: ShipId, nodeId: NodeId, to: 'periapsis' | 'apoapsis'): ActionResult;
+  setPauseOn(type: PausableEvent | 'all', on: boolean): ActionResult;
 }
 
 function createRegistry(): EventRegistry {
@@ -53,6 +63,12 @@ export const useWorld = create<WorldState>()((set, get) => {
     warpDown: () => act(actions.warpDown),
     setWarpIndex: (i) => act((w) => actions.setWarpIndex(w, i)),
     spawnShip: (p) => act((w) => actions.spawnShip(w, p)),
+    addNode: (id, p) => act((w) => actions.addNode(w, id, p)),
+    addNodeAt: (id, at) => act((w) => actions.addNodeAt(w, id, at)),
+    editNode: (id, nodeId, edit) => act((w) => actions.editNode(w, id, nodeId, edit)),
+    deleteNode: (id, nodeId) => act((w) => actions.deleteNode(w, id, nodeId)),
+    snapNode: (id, nodeId, to) => act((w) => actions.snapNode(w, id, nodeId, to)),
+    setPauseOn: (type, on) => act((w) => actions.setPauseOn(w, type, on)),
   };
 });
 

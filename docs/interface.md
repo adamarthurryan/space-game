@@ -130,9 +130,9 @@ The core interaction should be quick, direct, and precise. It always applies to 
 
 **Nodes (impulsive)**
 
-- **Create:** hover over the active ship's trajectory. A ghost node follows the cursor along the path, showing the time and orbital position. Click to place it. Nodes can also be added from the inspector: "at next Pe", "at next Ap", "at AN/DN", or "at time T".
-- **Edit in 3D:** the selected node shows a gizmo with six handles (prograde/retrograde, normal/anti-normal, radial in/out). Dragging a handle changes that Δv component with **nonlinear sensitivity**: small drags give fine adjustments and large drags give coarse ones. Modifier keys switch to fine or coarse mode. Dragging the node itself along the trajectory changes its time.
-- **Edit numerically:** the inspector shows the node's time and Δv components as editable fields. They accept scroll-wheel nudges and typed values, with units.
+- **Create:** hover over the active ship's trajectory. A ghost node (◇) follows the cursor along the path, showing the time from now and the altitude. Click to place it. Nodes can also be added from the inspector's **Plan** section ("Add node ▾"): "at next Pe", "at next Ap", "at next AN/DN" (against the parent's equator until targets exist), or "at time T". "Next" means after the plan's last node, so nodes chain: after a trans-lunar injection, "next Pe" is the lunar periapsis.
+- **Edit in 3D:** the selected node shows a gizmo with six handles (prograde/retrograde in yellow, normal/anti-normal in magenta, radial in/out in cyan). Dragging a handle changes that Δv component with **nonlinear sensitivity**: small drags give fine adjustments and large drags give coarse ones (10 px ≈ 0.1 m/s, 100 px = 100 m/s, 300 px ≈ 2.7 km/s). Shift switches to fine (×0.1) and Alt to coarse (×10). Handles that point at the camera are hidden. Dragging the node itself along the trajectory changes its time.
+- **Edit numerically:** the inspector shows the node's time (as a date, and as "T+" from now) and Δv components as editable fields. They accept scroll-wheel nudges (Δv 1 m/s, time 10 s; Shift finer, Alt coarser) and typed values, with units (`12 m/s`, `3.1 km/s`, `1d 2h 30m`). Delete removes the selected node.
 - **Finite execution:** a toggle executes the node as a real burn centred on the node time. When it is on, the actual path is drawn next to the impulsive prediction, so the player can see the difference.
 
 **Thrust arcs (low-thrust)**
@@ -245,6 +245,7 @@ The designer is free-form, with no hull classes and no 3D layout (see [features.
 - Clicking an event in the timeline strip allows setting an alarm for that event.
 - **Preview scrubbing:** dragging the playhead forward lets you look at the future. It does not commit time. A clear visual mode (a tinted border and a "PREVIEW" badge) shows when the map is not at "now". Release or press Esc to return.
 - Warp automatically drops at alarms and every event that needs a decision.
+- **Pause on ▾:** a popover beside the time controls with a checkbox per event type (node execution, SOI change, impact) and "All events". When an event of a ticked type happens, the clock pauses exactly at it. By default it pauses on node execution only. Alarms (per event, with lead times) build on this later.
 
 ## Alarms and alerts
 

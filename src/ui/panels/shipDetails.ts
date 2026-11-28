@@ -16,7 +16,8 @@ import {
 import { eclipticToPlane } from '../../orbital/frames';
 import { getBody, type BodyId } from '../../sim/body';
 import { shipStateAt, shipStats, type ShipId, type ShipStats } from '../../sim/ship';
-import type { SegmentEnd } from '../../sim/trajectory';
+import { assertNever, type SegmentEnd } from '../../sim/trajectory';
+import { formatSpeed } from '../format';
 import type { World } from '../../sim/world';
 
 export interface ShipDetails {
@@ -42,7 +43,7 @@ export interface ShipDetails {
     speed: number;
   };
   /** Upcoming events from the trajectory, excluding the horizon. */
-  events: { kind: SegmentEnd; targetName?: string; t: number }[];
+  events: { kind: SegmentEnd; targetName?: string; t: number; dv?: number }[];
 }
 
 /** Tank capacity per resource for the ship's modules. */
@@ -110,12 +111,24 @@ export function shipDetails(world: World, id: ShipId, t: number): ShipDetails {
     if (seg.endEvent === 'horizon' || seg.tEnd < t) continue;
     const e: ShipDetails['events'][number] = { kind: seg.endEvent, t: seg.tEnd };
     if (seg.endTargetId) e.targetName = getBody(system, seg.endTargetId).name;
+    if (seg.endEvent === 'maneuver') e.dv = seg.dvApplied ?? 0;
     d.events.push(e);
   }
   return d;
 }
 
-/** One line for an event: `Moon SOI`, `Sun SOI`, `Impact (Earth)`. */
-export function eventLabel(e: { kind: SegmentEnd; targetName?: string }): string {
-  return e.kind === 'impact' ? `Impact (${e.targetName ?? '?'})` : `${e.targetName ?? '?'} SOI`;
+/** One line for an event: `Moon SOI`, `Sun SOI`, `Impact (Earth)`, `Burn 3.1 km/s`. */
+export function eventLabel(e: { kind: SegmentEnd; targetName?: string; dv?: number }): string {
+  switch (e.kind) {
+    case 'impact':
+      return `Impact (${e.targetName ?? '?'})`;
+    case 'maneuver':
+      return `Burn ${formatSpeed(e.dv ?? 0)}`;
+    case 'soi-enter':
+    case 'soi-exit':
+    case 'horizon':
+      return `${e.targetName ?? '?'} SOI`;
+    default:
+      return assertNever(e.kind);
+  }
 }

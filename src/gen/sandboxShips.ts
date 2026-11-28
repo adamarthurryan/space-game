@@ -11,10 +11,16 @@ import { bodyStateIn, getBody, type BodyId, type BodySystem } from '../sim/body'
 import type { OrbitState } from '../sim/ship';
 import { computeTrajectory } from '../sim/trajectory';
 
-export type SpawnPreset = 'leo' | 'low-lunar' | 'earth-escape' | 'to-the-moon' | 'suborbital';
+export type SpawnPreset =
+  'leo' | 'leo-lunar-plane' | 'low-lunar' | 'earth-escape' | 'to-the-moon' | 'suborbital';
+/** Presets that depend on the time (the Moon's position), computed as a state at t. */
+export type ComputedPreset = 'to-the-moon' | 'leo-lunar-plane';
+export const isComputedPreset = (p: SpawnPreset): p is ComputedPreset =>
+  p === 'to-the-moon' || p === 'leo-lunar-plane';
 
 export const SPAWN_PRESETS: readonly { id: SpawnPreset; name: string }[] = [
   { id: 'leo', name: 'LEO (400 km)' },
+  { id: 'leo-lunar-plane', name: 'LEO (lunar plane)' },
   { id: 'low-lunar', name: 'Low lunar orbit (100 km)' },
   { id: 'earth-escape', name: 'Earth escape' },
   { id: 'to-the-moon', name: 'To the Moon' },
@@ -58,10 +64,10 @@ export function orbitFromInput(sys: BodySystem, input: OrbitInput, t: number): O
   };
 }
 
-/** The form's fields for a preset, where the preset is a fixed orbit (not 'to-the-moon'). */
+/** The form's fields for a preset, where the preset is a fixed orbit (not a computed one). */
 export function presetInput(
   sys: BodySystem,
-  preset: Exclude<SpawnPreset, 'to-the-moon'>,
+  preset: Exclude<SpawnPreset, ComputedPreset>,
 ): OrbitInput {
   const base = { lan: 0, argp: 0, nu: 0, plane: 'equator' as const };
   switch (preset) {
@@ -161,9 +167,31 @@ function toTheMoon(sys: BodySystem, t: number): OrbitState {
   return departure(best);
 }
 
+/** Altitude of the 'leo-lunar-plane' preset, km (S4-19). */
+const LUNAR_PLANE_LEO_ALTITUDE = 200;
+
+/**
+ * A 200 km circular Earth orbit in the Moon's orbit plane at t, moving the same way as the
+ * Moon, starting under the Moon (S4-19): the parking orbit for a trans-lunar injection by hand.
+ */
+function leoLunarPlane(sys: BodySystem, t: number): OrbitState {
+  const earth = getBody(sys, 'earth');
+  const m = bodyStateIn(sys, 'moon', 'earth', t);
+  const h = normalize(cross(m.r, m.v));
+  const rHat = normalize(m.r);
+  const r = earth.radius + LUNAR_PLANE_LEO_ALTITUDE;
+  return {
+    parentId: 'earth',
+    t,
+    r: scale(rHat, r),
+    v: scale(cross(h, rHat), Math.sqrt(earth.mu / r)),
+  };
+}
+
 /** The state of a spawn preset at t. */
 export function presetOrbit(sys: BodySystem, preset: SpawnPreset, t: number): OrbitState {
   if (preset === 'to-the-moon') return toTheMoon(sys, t);
+  if (preset === 'leo-lunar-plane') return leoLunarPlane(sys, t);
   return orbitFromInput(sys, presetInput(sys, preset), t);
 }
 

@@ -14,7 +14,7 @@ import {
   type SimEvent,
 } from './events';
 import type { Ship, ShipId } from './ship';
-import type { Trajectory } from './trajectory';
+import type { Segment, Trajectory } from './trajectory';
 
 export interface World {
   system: BodySystem;
@@ -22,8 +22,18 @@ export interface World {
   /** Insertion order = seq order. */
   ships: Record<ShipId, Ship>;
   nextShipSeq: number;
+  /** The next node's number: IDs are `node-<n>`, unique across ships (S4-1). */
+  nextNodeSeq: number;
   /** Rebuildable from the rest; not saved (S3-11). */
-  derived: { trajectories: Record<ShipId, Trajectory>; events: PQueue<SimEvent> };
+  derived: Derived;
+}
+
+export interface Derived {
+  trajectories: Record<ShipId, Trajectory>;
+  events: PQueue<SimEvent>;
+  /** The last few trajectories of each ship, by key, most recent last (S4-8). */
+  trajectoryCache: Record<ShipId, { key: string; segments: Segment[] }[]>;
+  cacheStats: { hits: number; misses: number };
 }
 
 /** At most this many events are handled per frame (S3-9). */
@@ -31,7 +41,14 @@ export const MAX_EVENTS_PER_FRAME = 256;
 
 /** A world around `system` with a running ×1 clock at `t`, and no ships. */
 export function createWorld(system: BodySystem, t = 0): World {
-  return { system, clock: createClock(t), ships: {}, nextShipSeq: 1, derived: emptyDerived() };
+  return {
+    system,
+    clock: createClock(t),
+    ships: {},
+    nextShipSeq: 1,
+    nextNodeSeq: 1,
+    derived: emptyDerived(),
+  };
 }
 
 /** Adds a ship, computes its trajectory and queues its event. */
@@ -56,8 +73,9 @@ export function rebuildDerived(world: World): void {
 /**
  * The clock stage (S3-9): aims for `clockTarget`, and on the way sets t to each due event's
  * time exactly and dispatches it. Handlers may queue events, which run in the same frame if
- * due. After MAX_EVENTS_PER_FRAME events, t stays at the last one. Returns the number of events
- * handled and whether any handler asked to pause.
+ * due. After MAX_EVENTS_PER_FRAME events, t stays at the last one. When a handler asks to pause
+ * (S4-7), the clock is paused with t at that event's time, and nothing more runs this frame.
+ * Returns the number of events handled and whether the clock was paused.
  */
 export function advanceWorld(
   world: World,
@@ -69,16 +87,18 @@ export function advanceWorld(
   const target = clockTarget(clock, dtWall);
   const queue = world.derived.events;
   let events = 0;
-  let pause = false;
   for (;;) {
     const next = peek(queue);
     if (!next || next.key > target) break;
-    if (events >= MAX_EVENTS_PER_FRAME) return { events, pause };
+    if (events >= MAX_EVENTS_PER_FRAME) return { events, pause: false };
     pop(queue);
     clock.t = Math.max(clock.t, next.key);
     events++;
-    if (dispatch(reg, world, next.value).pause) pause = true;
+    if (dispatch(reg, world, next.value).pause) {
+      clock.paused = true;
+      return { events, pause: true };
+    }
   }
   clock.t = Math.max(clock.t, target);
-  return { events, pause };
+  return { events, pause: false };
 }

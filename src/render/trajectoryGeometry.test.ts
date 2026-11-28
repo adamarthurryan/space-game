@@ -13,6 +13,8 @@ import {
   sampleSegmentInto,
   writeTrajectoryVertices,
   type SegmentPolyline,
+  currentOrbitRestWindow,
+  firstNodeSegment,
 } from './trajectoryGeometry';
 
 const sys = syntheticSystem(0.3);
@@ -162,5 +164,29 @@ describe('last revolution', () => {
   it('a segment ending at the horizon has none', () => {
     const seg = ellipse(4.5, 'horizon');
     expect(lastRevolutionWindow(seg, conicGeometry(sys, seg), 'moon', seg.tStart)).toBeNull();
+  });
+});
+
+describe('planned path and the current orbit after a node (S4-11)', () => {
+  it('finds the first node segment after t', () => {
+    const seg = (endEvent: 'maneuver' | 'horizon', tEnd: number) =>
+      ({ endEvent, tEnd }) as Parameters<typeof firstNodeSegment>[0][number];
+    const segs = [seg('maneuver', 100), seg('maneuver', 200), seg('horizon', 300)];
+    expect(firstNodeSegment(segs, 0)).toBe(0);
+    expect(firstNodeSegment(segs, 150)).toBe(1);
+    expect(firstNodeSegment(segs, 250)).toBe(Infinity);
+  });
+
+  it('gives the rest of a closed orbit after a node on it', () => {
+    const g = { kind: 'elliptic', period: 1000 } as Parameters<typeof currentOrbitRestWindow>[1];
+    const seg = (endEvent: 'maneuver' | 'horizon', tEnd: number) =>
+      ({ endEvent, tEnd, tStart: 0 }) as Parameters<typeof currentOrbitRestWindow>[0];
+    expect(currentOrbitRestWindow(seg('maneuver', 300), g, 100)).toEqual([300, 1100]);
+    expect(currentOrbitRestWindow(seg('maneuver', 3000), g, 100)).toBeNull();
+    expect(currentOrbitRestWindow(seg('horizon', 300), g, 100)).toBeNull();
+    const open = { kind: 'hyperbolic', period: Infinity } as Parameters<
+      typeof currentOrbitRestWindow
+    >[1];
+    expect(currentOrbitRestWindow(seg('maneuver', 300), open, 100)).toBeNull();
   });
 });

@@ -11,14 +11,15 @@
  */
 
 import { SECONDS_PER_JULIAN_YEAR } from '../math/units';
-import { vec3, type Vec3 } from '../math/vec3';
+import { dot, norm, vec3, type Vec3 } from '../math/vec3';
 import { elementsFromState, periapsis, type StateVector } from '../orbital/elements';
 import { meanPositionInto, propagateInto } from '../orbital/propagate';
 import { findSphereEntry, timeToRadius } from '../orbital/soi';
 import { changeFrame, getBody, majorChildren, type BodyId, type BodySystem } from './body';
+import { nodeDvVector, dvMagnitude, type ManeuverNode, type NodeId } from './maneuver';
 import type { OrbitState } from './ship';
 
-export type SegmentEnd = 'soi-exit' | 'soi-enter' | 'impact' | 'horizon'; // sprint 4 adds 'maneuver'
+export type SegmentEnd = 'soi-exit' | 'soi-enter' | 'impact' | 'horizon' | 'maneuver';
 
 export interface ConicSegment {
   kind: 'conic';
@@ -31,6 +32,12 @@ export interface ConicSegment {
   endEvent: SegmentEnd;
   /** The body entered, exited to, or impacted. */
   endTargetId?: BodyId;
+  /** The node executed at the end, when endEvent is 'maneuver' (S4-3). */
+  endNodeId?: NodeId;
+  /** The Δv magnitude applied there, km/s; less than the node's when over budget (S4-4). */
+  dvApplied?: number;
+  /** The Δv vector applied there, in the parent frame's axes, km/s. */
+  dvVector?: Vec3;
 }
 
 /** Milestone 3 adds ThrustSegment. */
@@ -38,8 +45,19 @@ export type Segment = ConicSegment;
 
 export interface Trajectory {
   segments: Segment[];
-  /** Bumped on every recompute. */
+  /** Bumped whenever the segments change. */
   version: number;
+  /** The inputs the segments were computed from (S4-8): `trajectoryKey`. */
+  key: string;
+}
+
+export interface TrajectoryOptions {
+  maxSegments?: number;
+  horizonCap?: number;
+  /** The ship's plan; its enabled nodes after the start are applied in t order (S4-3). */
+  plan?: readonly ManeuverNode[];
+  /** Δv to spend on the plan, km/s (S4-4). Default: unlimited. */
+  dvAvailable?: number;
 }
 
 /** At most this many segments per trajectory (S3-7). */
@@ -48,6 +66,8 @@ export const MAX_SEGMENTS = 5;
 export const HORIZON_CAP = 10 * SECONDS_PER_JULIAN_YEAR;
 /** A segment never ends sooner than this after starting on the boundary it just crossed, s. */
 export const MIN_SEGMENT_S = 1;
+/** A start this close to the SOI radius (relative), moving out, counts as on the boundary. */
+const SOI_BOUNDARY_REL = 1e-9;
 /** The entry search's smallest step is the SOI radius over this many times the closing speed. */
 const ENTRY_MIN_STEP_DIVISOR = 100;
 
@@ -84,6 +104,8 @@ function nextParent(sys: BodySystem, seg: Segment): BodyId | null {
       return getBody(sys, seg.parentId).parentId;
     case 'soi-enter':
       return seg.endTargetId ?? null;
+    case 'maneuver':
+      return seg.parentId;
     case 'impact':
     case 'horizon':
       return null;
@@ -97,6 +119,15 @@ export function transitionState(sys: BodySystem, seg: Segment): OrbitState | nul
   const to = nextParent(sys, seg);
   if (to === null) return null;
   const end = segmentStateAt(sys, seg, seg.tEnd);
+  if (seg.endEvent === 'maneuver') {
+    const d = seg.dvVector ?? { x: 0, y: 0, z: 0 };
+    return {
+      parentId: to,
+      t: seg.tEnd,
+      r: end.r,
+      v: { x: end.v.x + d.x, y: end.v.y + d.y, z: end.v.z + d.z },
+    };
+  }
   const s = changeFrame(sys, end, seg.parentId, to, seg.tEnd);
   return { parentId: to, t: seg.tEnd, r: s.r, v: s.v };
 }
@@ -134,7 +165,15 @@ function findSegmentEnd(
 
   // SOI exit, outbound; the root has none.
   if (parent.parentId !== null && parent.soiRadius !== undefined) {
-    const dtExit = timeToRadius(mu, s0, parent.soiRadius, 'outbound');
+    let dtExit = timeToRadius(mu, s0, parent.soiRadius, 'outbound');
+    // A start on the boundary, moving out (a node tied with the exit, S4-3), exits at once.
+    if (
+      dtExit === null &&
+      norm(s0.r) >= parent.soiRadius * (1 - SOI_BOUNDARY_REL) &&
+      dot(s0.r, s0.v) > 0
+    ) {
+      dtExit = 0;
+    }
     if (dtExit !== null) {
       const t = t0 + (justEntered ? Math.max(dtExit, MIN_SEGMENT_S) : dtExit);
       consider(t, { tEnd: t, endEvent: 'soi-exit', endTargetId: parent.parentId });
@@ -168,19 +207,33 @@ function findSegmentEnd(
   return best;
 }
 
-/** Patched-conic coasting from `start` (S3-7, S3-8). Deterministic; plain data out. */
+/**
+ * Patched-conic coasting from `start` (S3-7, S3-8), through the plan's enabled nodes (S4-3).
+ * A segment also ends at the next node in (tStart, tEnd]; ties with an SOI change or impact go
+ * to the node. Segments ending at a node don't count towards `maxSegments`. Deterministic; plain
+ * data out.
+ */
 export function computeTrajectory(
   sys: BodySystem,
   start: OrbitState,
-  opts: { maxSegments?: number; horizonCap?: number } = {},
+  opts: TrajectoryOptions = {},
 ): Segment[] {
   const maxSegments = opts.maxSegments ?? MAX_SEGMENTS;
   const tCap = start.t + (opts.horizonCap ?? HORIZON_CAP);
+  const nodes = (opts.plan ?? []).filter((n) => n.enabled && n.t > start.t);
+  nodes.sort((a, b) => a.t - b.t);
+  let dvLeft = opts.dvAvailable ?? Infinity;
+  let nextNode = 0;
   const segments: Segment[] = [];
+  let coasting = 0;
   let state: OrbitState | null = start;
   let justEntered = false;
-  while (state && segments.length < maxSegments) {
-    const end = findSegmentEnd(sys, state, tCap, justEntered);
+  while (state && coasting < maxSegments) {
+    // Nodes at or before this segment's start (a tie with the previous end) are passed.
+    while (nextNode < nodes.length && nodes[nextNode]!.t <= state.t) nextNode++;
+    const node = nodes[nextNode];
+    const limit = node && node.t <= tCap ? node.t : tCap;
+    const end = findSegmentEnd(sys, state, limit, justEntered);
     const seg: ConicSegment = {
       kind: 'conic',
       parentId: state.parentId,
@@ -190,10 +243,41 @@ export function computeTrajectory(
       tEnd: end.tEnd,
       endEvent: end.endEvent,
     };
-    if (end.endTargetId !== undefined) seg.endTargetId = end.endTargetId;
+    if (node && end.endEvent === 'horizon' && end.tEnd === node.t) {
+      // The segment was cut at the node (ties go to it, S4-3).
+      const want = dvMagnitude(node.dv);
+      const applied = Math.min(want, Math.max(dvLeft, 0));
+      dvLeft -= applied;
+      seg.endEvent = 'maneuver';
+      seg.endNodeId = node.id;
+      seg.dvApplied = applied;
+      const pre = segmentStateAt(sys, seg, node.t);
+      seg.dvVector = nodeDvVector(sys, seg.parentId, pre, node.dv, applied);
+      nextNode++;
+    } else {
+      coasting++;
+      if (end.endTargetId !== undefined) seg.endTargetId = end.endTargetId;
+    }
     segments.push(seg);
-    justEntered = end.endEvent === 'soi-enter';
+    justEntered = seg.endEvent === 'soi-enter';
     state = transitionState(sys, seg);
   }
   return segments;
+}
+
+/**
+ * The cache key of a ship's trajectory inputs (S4-8): its status, orbit, enabled nodes and the
+ * Δv available. Numbers are written exactly (`String` of a float64 round-trips).
+ */
+export function trajectoryKey(
+  ship: { status: string; orbit: OrbitState; plan: readonly ManeuverNode[] },
+  dvAvailable: number,
+): string {
+  if (ship.status !== 'coasting') return ship.status;
+  const { parentId, t, r, v } = ship.orbit;
+  let key = `${parentId}|${t}|${r.x},${r.y},${r.z}|${v.x},${v.y},${v.z}|${dvAvailable}`;
+  for (const n of ship.plan) {
+    if (n.enabled) key += `|${n.id}@${n.t}:${n.dv.prograde},${n.dv.normal},${n.dv.radial}`;
+  }
+  return key;
 }

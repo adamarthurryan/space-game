@@ -13,6 +13,7 @@
   --color-text-dim: #7d879a;
   --color-accent: #4fa3ff;
   --color-warning: #f0b43c;
+  --color-danger: #ff5c5c;
 
   /* Layout */
   --left-width: 260px;

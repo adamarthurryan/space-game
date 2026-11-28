@@ -10,6 +10,7 @@ import {
   formatSpeed,
 } from '../format';
 import styles from './BodyInspector.module.css';
+import { PlanSection } from './PlanSection';
 import { eventLabel, shipDetails } from './shipDetails';
 
 function Rows({ rows }: { rows: [string, string][] }) {
@@ -96,6 +97,7 @@ export function ShipInspector({ id }: { id: string }) {
           Focus
         </button>
       )}
+      {!d.destroyed && <PlanSection shipId={id} />}
       <h4 className={styles['section']}>Mass and propellant</h4>
       <Rows rows={mass} />
       <h4 className={styles['section']}>Engines</h4>

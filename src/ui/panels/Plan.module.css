@@ -1,0 +1,140 @@
+.editor {
+  display: grid;
+  gap: 4px;
+}
+
+.name {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.link {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.section {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+}
+
+.list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 4px 0;
+}
+
+.list dt {
+  color: var(--color-text-dim);
+}
+
+.list dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.empty,
+.dim {
+  margin: 0;
+  color: var(--color-text-dim);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.danger {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+.warning {
+  margin: 0;
+  color: var(--color-warning);
+}
+
+.result {
+  margin: 4px 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.check {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-right: 4px;
+}
+
+.action {
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-panel-raised);
+  cursor: pointer;
+}
+
+.nodes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nodeRow {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nodeRow[aria-current] {
+  background: var(--color-panel-raised);
+}
+
+.menu {
+  position: relative;
+  margin-top: 4px;
+}
+
+.popover {
+  display: grid;
+  gap: 2px;
+  margin-top: 2px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-panel-raised);
+}
+
+.popover button {
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.popover input {
+  width: 8em;
+}

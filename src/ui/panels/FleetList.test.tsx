@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { presetOrbit } from '../../gen/sandboxShips';
@@ -69,5 +69,16 @@ describe('FleetList', () => {
     render(<FleetList />);
     await user.click(screen.getByRole('button', { name: 'Spawn ship…' }));
     expect(screen.getByRole('form', { name: 'Spawn ship' })).toBeTruthy();
+  });
+});
+
+describe('FleetList: the active ship (S4-9)', () => {
+  it('marks the last selected ship with ★, and keeps it when a body is selected', () => {
+    render(<FleetList />);
+    fireEvent.click(screen.getByRole('option', { name: /Tern/ }));
+    expect(screen.getByRole('option', { name: /Tern/ }).textContent).toContain('★');
+    act(() => useView.getState().select({ kind: 'body', id: 'moon' }));
+    expect(screen.getByRole('option', { name: /Tern/ }).textContent).toContain('★');
+    expect(screen.getByRole('option', { name: /Kestrel/ }).textContent).not.toContain('★');
   });
 });

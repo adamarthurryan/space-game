@@ -1,4 +1,4 @@
-import { useView } from '../../store/useView';
+import { focusRefOf, useView } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import styles from './MapToolbar.module.css';
 
@@ -9,8 +9,10 @@ export function MapToolbar() {
   // Ships change status as the sim runs; the version says when.
   useWorld((s) => s.version);
   const { snapTo, focusOn } = useView.getState();
-  const ship = selected?.kind === 'ship' ? world.ships[selected.id] : undefined;
-  const body = selected?.kind === 'body' ? world.system.bodies[selected.id] : undefined;
+  // A selected node stands for its ship (S4-10).
+  const ref = selected ? focusRefOf(selected) : null;
+  const ship = ref?.kind === 'ship' ? world.ships[ref.id] : undefined;
+  const body = ref?.kind === 'body' ? world.system.bodies[ref.id] : undefined;
   const name = ship?.name ?? body?.name;
   const hasOrbit = ship ? ship.status === 'coasting' : !!body?.orbit;
 

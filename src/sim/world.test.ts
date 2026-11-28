@@ -5,7 +5,7 @@ import { peek, pop, size } from '../math/pqueue';
 import { SECONDS_PER_DAY } from '../math/units';
 import { add, norm, sub, vec3 } from '../math/vec3';
 import { bodyWorldState } from './body';
-import { setWarpIndex } from './clock';
+import { DEFAULT_PAUSE_ON, setWarpIndex } from './clock';
 import { createEventRegistry, dispatch, on, registerShipHandlers } from './events';
 import { createShip, shipStateAt, type OrbitState } from './ship';
 import { MU_PLANET, syntheticSystem } from './testSystem';
@@ -28,7 +28,7 @@ describe('world', () => {
   it('holds the system and a running clock', () => {
     const w = createWorld(system, 7);
     expect(w.system).toBe(system);
-    expect(w.clock).toEqual({ t: 7, warpIndex: 0, paused: false });
+    expect(w.clock).toEqual({ t: 7, warpIndex: 0, paused: false, pauseOn: DEFAULT_PAUSE_ON });
   });
 
   it('survives a JSON round trip', () => {

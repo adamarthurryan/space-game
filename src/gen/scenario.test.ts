@@ -1,3 +1,4 @@
+import { DEFAULT_PAUSE_ON } from '../sim/clock';
 import { describe, expect, it } from 'vitest';
 import { jdFromCalendar } from '../math/time';
 import { validateBodySystem } from '../sim/body';
@@ -14,7 +15,7 @@ describe('sandbox scenario', () => {
     const w = createSandboxWorld();
     expect(w.system.epochJd).toBe(SANDBOX_EPOCH_JD);
     expect(validateBodySystem(w.system)).toEqual([]);
-    expect(w.clock).toEqual({ t: 0, warpIndex: 0, paused: false });
+    expect(w.clock).toEqual({ t: 0, warpIndex: 0, paused: false, pauseOn: DEFAULT_PAUSE_ON });
     expect(Object.keys(w.system.bodies)).toHaveLength(31);
   });
 

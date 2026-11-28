@@ -11,7 +11,7 @@ description: Launch the space game in a browser and check that it works. Use whe
 npm run smoke
 ```
 
-It runs `test/smoke/shell.mjs`, then `test/smoke/map.mjs`, then `test/smoke/ships.mjs`. Each starts Vite on port 5199
+It runs `test/smoke/shell.mjs`, then `test/smoke/map.mjs`, then `test/smoke/ships.mjs`, then `test/smoke/maneuvers.mjs`. Each starts Vite on port 5199
 (`SMOKE_PORT` to change it), drives the installed Google Chrome headless through
 `playwright-core`, prints a PASS/FAIL line per check, and exits non-zero on any failure. The
 shared server, browser and console watch are in `test/smoke/lib.mjs`; it always stops the server
@@ -26,7 +26,12 @@ it started.
   in the Fleets tab, spawning Earth escape, To the Moon and Suborbital through the form, the
   re-base into the Sun's frame at ×10⁶, the lunar segment and its SOI marker at Moon focus, an
   impact destroying a ship, no jitter at a ship focus, and picking Kestrel's marker.
-- Both fail on any console error, warning or failed request, except SwiftShader's "GPU stall due
+- `maneuvers.mjs` checks maneuver nodes (sprint 4's acceptance criteria): spawning LEO (lunar
+  plane), the ghost node and click-to-create, gizmo handle drags (100 px = 100 m/s, Shift ×0.1),
+  the typed TLI giving a Moon encounter, "Add node ▾ → at next Pe" and a circularising LOI, the
+  clock pausing exactly at each node and the lunar orbit matching the prediction, the Pause on
+  menu, and an over-budget plan.
+- All of them fail on any console error, warning or failed request, except SwiftShader's "GPU stall due
   to ReadPixels" message, which the screenshots themselves cause.
 
 Screenshots are written to `test/smoke/out/` (git-ignored): read them to look at the result.
@@ -34,7 +39,8 @@ Screenshots are written to `test/smoke/out/` (git-ignored): read them to look at
 `map.mjs` reads the dev-only debug handle `window.__spaceGame` (`src/render/debugHandle.ts`):
 `camera()`, `body(id)` (screen position, disc, depth), `labels()`, `orbitNormal(id)`,
 `simTime()`, `ship(id)`, `ships()`, `trajectory(id)`, `trajectoryVertices(id)`,
-`trajectoryMarkers()`, and the `view` and `world` stores. Use it from your own Playwright scripts too.
+`trajectoryMarkers()`, `plan(id)`, `nodeScreen(id)`, `gizmo()`, `ghost()`, `activePath()`,
+`activeShip()`, `trajectoryKey(id)`, and the `view` and `world` stores. Use it from your own Playwright scripts too.
 
 When a sprint adds something visible, add its checks to the smoke file for that area (or a new
 file using `lib.mjs`, added to the `smoke` script) rather than writing a separate driver.
@@ -42,7 +48,8 @@ file using `lib.mjs`, added to the `smoke` script) rather than writing a separat
 ## Gotchas
 
 - **Browser:** there is no `chromium-cli` here. The script uses Chrome's install location
-  (`channel: 'chrome'`); set `CHROME_PATH` if Chrome is elsewhere.
+  (`channel: 'chrome'`); set `CHROME_PATH` if Chrome is elsewhere (in cloud sessions,
+  `CHROME_PATH=/opt/pw-browsers/chromium`).
 - **Headless WebGL** needs `--use-angle=swiftshader --enable-unsafe-swiftshader` (already in the
   script).
 - **Stale dependency cache:** after changing a dependency, Vite must be started with `--force`

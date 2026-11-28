@@ -83,7 +83,8 @@ export function trajectoryMarkers(
       }
     }
 
-    if (seg.endEvent === 'horizon') return;
+    // Nodes have their own markers (S4-9).
+    if (seg.endEvent === 'horizon' || seg.endEvent === 'maneuver') return;
     const end = segmentStateAt(sys, seg, seg.tEnd).r;
     const pos = relativeToFrame(sys, seg, end, seg.tEnd, frameBodyId);
     // Past the first revolution, the text names the revolution.

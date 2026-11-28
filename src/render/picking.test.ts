@@ -94,3 +94,30 @@ describe('pick', () => {
     expect(pick(f, 110, 100)).toEqual({ kind: 'body', id: 'earth' });
   });
 });
+
+describe('pick: nodes (S4-13)', () => {
+  it('picks a node glyph before the ship marker beside it', () => {
+    const f = frame();
+    const w = createSandboxWorld();
+    syncFrameShips(f, w);
+    const k = f.ships.indexOf['ship-1']!;
+    f.ships.screenX[k] = 200;
+    f.ships.screenY[k] = 200;
+    f.ships.depth[k] = 1e4;
+    f.ships.markerShown[k] = 1;
+    f.nodes = [{ shipId: 'ship-1', nodeId: 'node-1', x: 205, y: 200 }];
+    expect(pick(f, 203, 200)).toEqual({ kind: 'node', shipId: 'ship-1', id: 'node-1' });
+    f.nodes = [];
+    expect(pick(f, 203, 200)).toEqual({ kind: 'ship', id: 'ship-1' });
+  });
+
+  it('picks the nearest of two nodes, and none out of reach', () => {
+    const f = frame();
+    f.nodes = [
+      { shipId: 'a', nodeId: 'n1', x: 100, y: 100 },
+      { shipId: 'a', nodeId: 'n2', x: 106, y: 100 },
+    ];
+    expect(pick(f, 104, 100)).toEqual({ kind: 'node', shipId: 'a', id: 'n2' });
+    expect(pick(f, 130, 100)).toBeNull();
+  });
+});

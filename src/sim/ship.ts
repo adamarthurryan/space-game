@@ -13,6 +13,7 @@ import type { Vec3 } from '../math/vec3';
 import type { StateVector } from '../orbital/elements';
 import { propagateInto } from '../orbital/propagate';
 import { getBody, type BodyId, type BodySystem } from './body';
+import type { ManeuverNode } from './maneuver';
 
 export type ShipId = string;
 
@@ -43,6 +44,8 @@ export interface Ship {
   destroyedAt?: { t: number; bodyId: BodyId };
   /** The state at the start of the current segment (S3-6). */
   orbit: OrbitState;
+  /** Maneuver nodes, sorted by t (S4-1). */
+  plan: ManeuverNode[];
 }
 
 const cloneOrbit = (o: OrbitState): OrbitState => ({
@@ -79,6 +82,7 @@ export function createShip(
     propellant,
     status: 'coasting',
     orbit: cloneOrbit(orbit),
+    plan: [],
   };
 }
 
@@ -112,6 +116,8 @@ export interface ShipStats {
   dv: number;
   /** km/s², at the current mass. */
   acceleration: number;
+  /** Mass fraction of each propellant in the combined flow of all engines (sums to 1). */
+  mixture: Partial<Record<ResourceId, number>>;
 }
 
 /** Mass, propellant and Δv from the modules, with every engine firing together (S3-5). */
@@ -143,8 +149,10 @@ export function shipStats(ship: Ship, reg: Registry = contentRegistry): ShipStat
   const wetMass = dryMass + propellantMass;
 
   let usable = flow > 0 ? Infinity : 0;
+  const fractions: Partial<Record<ResourceId, number>> = {};
   for (const [r, w] of Object.entries(mixture) as [ResourceId, number][]) {
     const fraction = w / flow;
+    fractions[r] = fraction;
     if (fraction > 0) usable = Math.min(usable, (ship.propellant[r] ?? 0) / fraction);
   }
   if (!Number.isFinite(usable)) usable = 0;
@@ -166,6 +174,7 @@ export function shipStats(ship: Ship, reg: Registry = contentRegistry): ShipStat
     dv,
     // N / kg = m/s²; ÷ 1000 for km/s².
     acceleration: wetMass > 0 ? thrust / wetMass / 1000 : 0,
+    mixture: fractions,
   };
 }
 

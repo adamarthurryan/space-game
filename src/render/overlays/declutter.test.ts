@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../../gen/scenario';
 import { getBody } from '../../sim/body';
-import type { MapObjectRef } from '../../store/useView';
+import type { FocusRef } from '../../store/useView';
 import { declutter, labelPriority, shipLabelPriority, type LabelCandidate } from './declutter';
 
 const viewport = { x: 0, y: 0, w: 800, h: 600 };
-const ref = (id: string): MapObjectRef => ({ kind: 'body', id });
+const ref = (id: string): FocusRef => ({ kind: 'body', id });
 
 function cand(id: string, x: number, y: number, priority: number, hidden = false): LabelCandidate {
   return { ref: ref(id), anchorX: x, anchorY: y, width: 50, height: 12, priority, hidden };

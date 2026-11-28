@@ -1,7 +1,7 @@
 /**
- * Screen-space picking (decision S2-14 in planning/sprint-2.md, S3-20 in sprint-3.md): one path
- * for ships, discs, labels and markers, reading the MapFrame's projection. Priority: the nearest
- * ship marker within reach that isn't behind a nearer disc > a disc under the cursor (the
+ * Screen-space picking (decision S2-14 in planning/sprint-2.md, S3-20 in sprint-3.md, S4-13 in
+ * sprint-4.md): one path for nodes, ships, discs, labels and markers, reading the MapFrame's
+ * projection. Priority: the nearest node glyph within reach > the nearest ship marker within reach that isn't behind a nearer disc > a disc under the cursor (the
  * nearest) > a label under the cursor > the nearest body marker within reach. Ships come first
  * because they are tiny and sit in front of their parent's disc.
  */
@@ -22,6 +22,18 @@ export function pick(
   radiusPx = PICK_RADIUS_PX,
 ): MapObjectRef | null {
   const n = frame.order.length;
+
+  // Node glyphs (S4-13): they often sit next to their ship, so they come first.
+  let bestNode: (typeof frame.nodes)[number] | null = null;
+  let bestNodeD = radiusPx;
+  for (const nd of frame.nodes) {
+    const d = Math.hypot(x - nd.x, y - nd.y);
+    if (d <= bestNodeD) {
+      bestNodeD = d;
+      bestNode = nd;
+    }
+  }
+  if (bestNode) return { kind: 'node', shipId: bestNode.shipId, id: bestNode.nodeId };
 
   // 0. Ship markers.
   const fs = frame.ships;

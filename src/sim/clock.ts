@@ -11,6 +11,17 @@ export const WARP_STEPS = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7] as const;
 /** Seconds of wall time per frame, at most (S2-3). */
 export const MAX_FRAME_DT = 0.25;
 
+/** Events the clock can pause at (decision S4-7 in planning/sprint-4.md). */
+export type PausableEvent = 'node' | 'soi-change' | 'impact';
+export const PAUSABLE_EVENTS: readonly PausableEvent[] = ['node', 'soi-change', 'impact'];
+
+/** By default the clock pauses at node execution only (S4-7). */
+export const DEFAULT_PAUSE_ON: Readonly<Record<PausableEvent, boolean>> = Object.freeze({
+  node: true,
+  'soi-change': false,
+  impact: false,
+});
+
 /** Plain data. */
 export interface Clock {
   /** Sim seconds from the epoch. */
@@ -18,11 +29,13 @@ export interface Clock {
   /** Index into WARP_STEPS. */
   warpIndex: number;
   paused: boolean;
+  /** Which events pause the clock when they are handled (S4-7). */
+  pauseOn: Record<PausableEvent, boolean>;
 }
 
 /** A running clock at ×1. */
 export function createClock(t = 0): Clock {
-  return { t, warpIndex: 0, paused: false };
+  return { t, warpIndex: 0, paused: false, pauseOn: { ...DEFAULT_PAUSE_ON } };
 }
 
 /** The current warp step, whether paused or not. */

@@ -4,7 +4,7 @@ import { meanOrbitNormal } from '../../orbital/propagate';
 import { getBody } from '../../sim/body';
 import { shipStateAt } from '../../sim/ship';
 import type { World } from '../../sim/world';
-import { useView, type MapObjectRef } from '../../store/useView';
+import { focusRefOf, useView, type FocusRef } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { mapObjectWorldInto, type MapFrame } from '../mapFrame';
 import { setFrameCamera } from '../projection';
@@ -23,7 +23,7 @@ import { framingDistanceOf, minDistanceOf } from './framing';
  * The orbit pole of a body or ship at the world's current time: a body's mean orbit normal, or
  * a ship's r × v (S3-15). Null for the root or a destroyed ship.
  */
-export function orbitPoleOf(world: World, ref: MapObjectRef): Vec3 | null {
+export function orbitPoleOf(world: World, ref: FocusRef): Vec3 | null {
   const { system, clock } = world;
   if (ref.kind === 'body') {
     const orbit = system.bodies[ref.id] ? getBody(system, ref.id).orbit : undefined;
@@ -40,7 +40,7 @@ function snapPole(plane: 'ecliptic' | 'selected-orbit'): Vec3 | null {
   if (plane === 'ecliptic') return vec3(0, 0, 1);
   const selected = useView.getState().selected;
   // Evaluated once, at the time of the snap, then kept fixed (S2-12).
-  return selected ? orbitPoleOf(useWorld.getState().world, selected) : null;
+  return selected ? orbitPoleOf(useWorld.getState().world, focusRefOf(selected)) : null;
 }
 
 const right = new Vector3();
@@ -74,7 +74,7 @@ export class CameraStage {
   readonly controller: CameraController;
   private readonly matrix = new Matrix4();
   private readonly unsubscribe: () => void;
-  private readonly focusWorld: (ref: MapObjectRef, out: Vec3) => Vec3;
+  private readonly focusWorld: (ref: FocusRef, out: Vec3) => Vec3;
   private readonly camera: PerspectiveCamera;
 
   constructor(camera: PerspectiveCamera, frame: MapFrame) {

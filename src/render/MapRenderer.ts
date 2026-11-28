@@ -8,7 +8,7 @@
 
 import { ACESFilmicToneMapping, Color, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import type { World } from '../sim/world';
-import { useView } from '../store/useView';
+import { resolveActiveShip, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { CameraStage } from './camera/CameraStage';
 import { registerDebug } from './debugHandle';
@@ -16,6 +16,7 @@ import { attachCameraInput } from './input/cameraInput';
 import { attachPointerInput } from './input/pointerInput';
 import { BodyLayer } from './layers/BodyLayer';
 import { MarkerLayer } from './layers/MarkerLayer';
+import { NodeGizmo } from './NodeGizmo';
 import { OrbitLayer } from './layers/OrbitLayer';
 import { TrajectoryLayer } from './layers/TrajectoryLayer';
 import { frameBodyOf, type MapFrame } from './mapFrame';
@@ -48,6 +49,7 @@ export class MapRenderer {
   private readonly camera = new PerspectiveCamera(FOV_DEG, 1, NEAR, FAR);
   private readonly cameraStage: CameraStage;
   private readonly layers: MapLayer[];
+  private readonly gizmo: NodeGizmo;
   private readonly detach: (() => void)[] = [];
   private readonly resizeObserver: ResizeObserver;
   private width = 1;
@@ -83,17 +85,20 @@ export class MapRenderer {
 
     this.cameraStage = new CameraStage(this.camera, frame);
     const trajectories = new TrajectoryLayer(this.scene);
-    // Layers draw in this order, so markers come last.
+    this.gizmo = new NodeGizmo(this.scene, this.camera);
+    // Layers draw in this order, so markers come last, and the gizmo is drawn on top.
     this.layers = [
       new BodyLayer(this.scene, frame, world.system),
       new OrbitLayer(this.scene, frame, world.system),
       trajectories,
       new MarkerLayer(this.scene, frame, world.system),
+      this.gizmo,
     ];
     for (const l of this.layers) l.sync?.(world);
     this.view = this.readView(world);
 
-    this.detach.push(attachPointerInput(canvas, frame));
+    // Pointer input first: it claims gizmo and node drags before the camera sees them.
+    this.detach.push(attachPointerInput(canvas, frame, this.gizmo));
     this.detach.push(attachCameraInput(canvas, this.cameraStage.controller));
     this.detach.push(
       useWorld.subscribe((s, prev) => {
@@ -114,6 +119,7 @@ export class MapRenderer {
     registerDebug('controller', this.cameraStage.controller);
     registerDebug('trajectories', trajectories);
     registerDebug('markers', markers);
+    registerDebug('gizmo', () => this.gizmo.debug(frame));
   }
 
   /** Starts the loop. */
@@ -152,12 +158,19 @@ export class MapRenderer {
   }
 
   private readView(world: World): ViewSnapshot {
-    const { focus, selected, hovered } = useView.getState();
-    return { focus, selected, hovered, frameBodyId: frameBodyOf(world, focus) };
+    const { focus, selected, hovered, activeShipId } = useView.getState();
+    return {
+      focus,
+      selected,
+      hovered,
+      frameBodyId: frameBodyOf(world, focus),
+      activeShipId: resolveActiveShip(world, activeShipId),
+    };
   }
 
-  /** One frame: every stage in order, then the draw. */
+  /** One frame: the queued node edit (S4-8), every stage in order, then the draw. */
   private renderFrame(): void {
+    this.gizmo.flush();
     for (const stage of STAGES) this.runStage(stage);
     this.renderer.render(this.scene, this.camera);
   }

@@ -74,3 +74,84 @@ export function addState(s: StateVector, origin: StateVector): StateVector {
 export function subState(s: StateVector, origin: StateVector): StateVector {
   return { r: sub(s.r, origin.r), v: sub(s.v, origin.v) };
 }
+
+/** Unit vectors of a state's local orbital frame (decision S4-2 in planning/sprint-4.md). */
+export interface OrbitalBasis {
+  prograde: Vec3;
+  normal: Vec3;
+  /** Radial out: prograde × normal, in the orbit plane, perpendicular to the velocity. */
+  radial: Vec3;
+}
+
+/** A Δv in a local orbital frame, km/s. */
+export interface LocalDv {
+  prograde: number;
+  normal: number;
+  radial: number;
+}
+
+/** Below this |r × v| / (|r||v|), the state is treated as radial and the normal falls back. */
+const DEGENERATE_SIN = 1e-12;
+
+const newBasis = (): OrbitalBasis => ({
+  prograde: { x: 0, y: 0, z: 0 },
+  normal: { x: 0, y: 0, z: 0 },
+  radial: { x: 0, y: 0, z: 0 },
+});
+
+/**
+ * The local orbital frame of s (S4-2): prograde = v̂, normal = (r × v)/|r × v|, radial =
+ * prograde × normal (outward: v × (r × v) = v²r − (r·v)v). For a radial state, the normal is the part
+ * of `fallbackPole` perpendicular to v (or of x̂, if the pole is parallel to v too).
+ */
+export function localOrbitalBasis(
+  s: StateVector,
+  fallbackPole: Vec3,
+  out: OrbitalBasis = newBasis(),
+): OrbitalBasis {
+  const { r, v } = s;
+  const vm = Math.hypot(v.x, v.y, v.z);
+  const p = out.prograde;
+  p.x = v.x / vm;
+  p.y = v.y / vm;
+  p.z = v.z / vm;
+  const n = out.normal;
+  n.x = r.y * v.z - r.z * v.y;
+  n.y = r.z * v.x - r.x * v.z;
+  n.z = r.x * v.y - r.y * v.x;
+  let nm = Math.hypot(n.x, n.y, n.z);
+  if (!(nm > DEGENERATE_SIN * Math.hypot(r.x, r.y, r.z) * vm)) {
+    // Gram–Schmidt of the fallback pole against the prograde direction.
+    for (const c of [fallbackPole, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }]) {
+      const d = c.x * p.x + c.y * p.y + c.z * p.z;
+      n.x = c.x - d * p.x;
+      n.y = c.y - d * p.y;
+      n.z = c.z - d * p.z;
+      nm = Math.hypot(n.x, n.y, n.z);
+      if (nm > 1e-6) break;
+    }
+  }
+  n.x /= nm;
+  n.y /= nm;
+  n.z /= nm;
+  const q = out.radial;
+  q.x = p.y * n.z - p.z * n.y;
+  q.y = p.z * n.x - p.x * n.z;
+  q.z = p.x * n.y - p.y * n.x;
+  return out;
+}
+
+/** The Δv vector of a local Δv. */
+export function dvToVector(b: OrbitalBasis, dv: LocalDv, out: Vec3 = { x: 0, y: 0, z: 0 }): Vec3 {
+  const { prograde: p, normal: n, radial: q } = b;
+  out.x = p.x * dv.prograde + n.x * dv.normal + q.x * dv.radial;
+  out.y = p.y * dv.prograde + n.y * dv.normal + q.y * dv.radial;
+  out.z = p.z * dv.prograde + n.z * dv.normal + q.z * dv.radial;
+  return out;
+}
+
+/** The local components of a Δv vector. */
+export function vectorToDv(b: OrbitalBasis, v: Vec3): LocalDv {
+  const d = (a: Vec3) => a.x * v.x + a.y * v.y + a.z * v.z;
+  return { prograde: d(b.prograde), normal: d(b.normal), radial: d(b.radial) };
+}
