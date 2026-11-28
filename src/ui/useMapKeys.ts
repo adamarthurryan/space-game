@@ -24,7 +24,8 @@ function ignoredFor(target: EventTarget | null, key: string): boolean {
 
 /**
  * Map shortcuts (S2-20): Space play/pause, `,` and `.` warp down and up, F focus the selection,
- * E and P snap to the ecliptic and the selected body's or ship's orbit, Esc clear the selection,
+ * E and P snap to the ecliptic and the selected body's or ship's orbit, Esc end a preview or
+ * clear the selection,
  * Delete remove the selected node (F on a node focuses its ship). Ignored
  * while a text field has focus, and with Ctrl, Alt or Meta held.
  */
@@ -60,8 +61,10 @@ export function useMapKeys(): void {
           view.snapTo('selected-orbit');
           break;
         case 'Escape':
-          if (!view.selected) return;
-          view.select(null);
+          // A preview ends first (S5-13); then the selection is cleared.
+          if (view.preview) view.endPreview();
+          else if (view.selected) view.select(null);
+          else return;
           break;
         case 'Delete':
         case 'Backspace': {

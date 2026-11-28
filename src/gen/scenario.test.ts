@@ -15,7 +15,13 @@ describe('sandbox scenario', () => {
     const w = createSandboxWorld();
     expect(w.system.epochJd).toBe(SANDBOX_EPOCH_JD);
     expect(validateBodySystem(w.system)).toEqual([]);
-    expect(w.clock).toEqual({ t: 0, warpIndex: 0, paused: false, pauseOn: DEFAULT_PAUSE_ON });
+    expect(w.clock).toEqual({
+      t: 0,
+      warpIndex: 0,
+      paused: false,
+      pauseOn: DEFAULT_PAUSE_ON,
+      warpTo: null,
+    });
     expect(Object.keys(w.system.bodies)).toHaveLength(31);
   });
 

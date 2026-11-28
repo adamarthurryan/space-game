@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, Line, type Scene } from 'three';
-import { vec3 } from '../../math/vec3';
+import { vec3, type Vec3 } from '../../math/vec3';
 import type { ShipId } from '../../sim/ship';
-import type { Trajectory } from '../../sim/trajectory';
+import type { Segment, Trajectory } from '../../sim/trajectory';
 import type { World } from '../../sim/world';
 import { sameRef, type MapObjectRef } from '../../store/useView';
 import { frameWorldInto, type FrameCamera, type MapFrame } from '../mapFrame';
@@ -13,11 +13,13 @@ import {
   conicGeometry,
   createPolyline,
   currentOrbitRestWindow,
+  elapsedWindow,
   firstNodeSegment,
   lastRevolutionWindow,
   MAX_VERTICES,
   samplePieceInto,
   sampleSegmentInto,
+  segmentIndexAt,
   writeTrajectoryVertices,
   type ConicGeometry,
   type SegmentPolyline,
@@ -28,6 +30,8 @@ import { createTrajectoryMaterial, type TrajectoryMaterial } from '../trajectory
 export const TRAJECTORY_ALPHA = { highlighted: 1, normal: 0.45 } as const;
 /** Future revolutions are drawn at this fraction of the ship's alpha, not brightened. */
 export const FUTURE_REVOLUTION_FADE = 0.35;
+/** The route flown during a preview is drawn at this fraction of the ship's alpha (S5-16). */
+export const ELAPSED_FADE = 0.35;
 
 /** One drawable piece: a THREE.Line, its vertex buffers, and the float64 polyline behind it. */
 interface Piece {
@@ -50,6 +54,8 @@ interface SegmentLines {
   last: Piece;
   /** The rest of the current orbit after a node on it (segment 0 of the active ship, S4-11). */
   rest: Piece;
+  /** In a preview, the part flown between now and the preview time, faded (S5-16). */
+  elapsed: Piece;
 }
 
 interface ShipLines {
@@ -97,7 +103,8 @@ const shipRel = vec3(0, 0, 0);
  * the ship's colour, relative to the frame body; the planned path after the first node dashed in
  * screen space. Objects are rebuilt only when a ship's trajectory changes (its version), or the
  * set of ships does. The active ship's main pieces are kept projected in `frame.paths`, for the
- * ghost node (S4-12).
+ * ghost node (S4-12). Paths are drawn from the frame's time, which is the preview time in a
+ * preview (S5-10); the route flown between now and then is drawn faded (S5-16).
  */
 export class TrajectoryLayer implements MapLayer {
   private readonly scene: Scene;
@@ -105,6 +112,8 @@ export class TrajectoryLayer implements MapLayer {
   private readonly ships = new Map<ShipId, ShipLines>();
   /** Drawn vertices per segment of each ship, this frame (main pieces), for the debug handle. */
   readonly vertexCounts = new Map<ShipId, number[]>();
+  /** Drawn vertices per segment of each ship's elapsed pieces this frame (S5-16), for debug. */
+  readonly elapsedCounts = new Map<ShipId, number[]>();
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -125,11 +134,14 @@ export class TrajectoryLayer implements MapLayer {
     frameWorldInto(frame, fb, frameBodyWorld);
     const t = frame.t;
 
-    for (let k = 0; k < fs.ids.length; k++) {
-      const id = fs.ids[k]!;
-      const ship = world.ships[id];
+    const now = frame.now;
+    // Every coasting ship: one not drawn at a previewed time (past its impact) still has its
+    // elapsed route (S5-16).
+    for (const ship of Object.values(world.ships)) {
+      const id = ship.id;
       const traj = world.derived.trajectories[id];
-      if (!ship || !traj) continue;
+      if (ship.status !== 'coasting' || !traj) continue;
+      const k = fs.indexOf[id];
       seen.add(id);
       const lines = this.linesFor(id, ship.seq, traj);
       const ref: MapObjectRef = { kind: 'ship', id };
@@ -141,14 +153,34 @@ export class TrajectoryLayer implements MapLayer {
         sameRef(view.hovered, ref);
       const alpha = highlighted ? TRAJECTORY_ALPHA.highlighted : TRAJECTORY_ALPHA.normal;
       const rgb = highlighted ? lines.highlight : lines.rgb;
-      shipRel.x = fs.world[3 * k]! - frameBodyWorld.x;
-      shipRel.y = fs.world[3 * k + 1]! - frameBodyWorld.y;
-      shipRel.z = fs.world[3 * k + 2]! - frameBodyWorld.z;
+      if (k !== undefined) {
+        shipRel.x = fs.world[3 * k]! - frameBodyWorld.x;
+        shipRel.y = fs.world[3 * k + 1]! - frameBodyWorld.y;
+        shipRel.z = fs.world[3 * k + 2]! - frameBodyWorld.z;
+      }
       const planned = firstNodeSegment(traj.segments, t);
+      // The segment the ship is on at t: its path starts at the ship (S5-10).
+      const cur = k === undefined ? -1 : segmentIndexAt(traj.segments, t);
 
       const counts: number[] = [];
+      const elapsedCounts: number[] = [];
       traj.segments.forEach((seg, i) => {
         const sl = lines.segments[i]!;
+        const g = sl.geometry;
+        elapsedCounts.push(
+          this.showElapsed(
+            sl,
+            seg,
+            g,
+            now,
+            t,
+            view.frameBodyId,
+            frameBodyWorld,
+            frame,
+            lines.rgb,
+            alpha,
+          ),
+        );
         if (seg.tEnd <= t) {
           sl.main.line.visible = false;
           sl.last.line.visible = false;
@@ -157,8 +189,7 @@ export class TrajectoryLayer implements MapLayer {
           return;
         }
         const dashed = i > planned;
-        const tFrom = i === 0 ? Math.max(t, seg.tStart) : seg.tStart;
-        const g = sl.geometry;
+        const tFrom = Math.max(t, seg.tStart);
         const live = g.kind === 'elliptic' && seg.parentId === view.frameBodyId;
 
         // The first piece: live from the ship's anomaly in its parent's frame; otherwise
@@ -167,6 +198,8 @@ export class TrajectoryLayer implements MapLayer {
         const stale =
           main.frameBodyId !== view.frameBodyId ||
           Number.isNaN(main.poly.builtAt) ||
+          // A preview moved back before the sampling (S5-10).
+          tFrom < main.poly.builtAt ||
           (g.kind === 'elliptic' && t - main.poly.builtAt > g.period / 4);
         if (live || stale) {
           sampleSegmentInto(world.system, seg, view.frameBodyId, tFrom, main.poly, g);
@@ -176,7 +209,7 @@ export class TrajectoryLayer implements MapLayer {
           main.positions,
           main.poly,
           t,
-          i === 0 ? shipRel : null,
+          i === cur ? shipRel : null,
           frameBodyWorld,
           frame.origin,
           main.times,
@@ -199,7 +232,12 @@ export class TrajectoryLayer implements MapLayer {
         if (!win) {
           last.line.visible = false;
         } else {
-          if (live || last.frameBodyId !== view.frameBodyId || Number.isNaN(last.poly.builtAt)) {
+          if (
+            live ||
+            last.frameBodyId !== view.frameBodyId ||
+            Number.isNaN(last.poly.builtAt) ||
+            t < last.poly.builtAt
+          ) {
             samplePieceInto(world.system, seg, g, view.frameBodyId, win[0], win[1], last.poly);
             last.poly.builtAt = t;
             last.frameBodyId = view.frameBodyId;
@@ -225,7 +263,7 @@ export class TrajectoryLayer implements MapLayer {
 
         // The rest of the current orbit after a node on it, for the active ship (S4-11).
         const rest = sl.rest;
-        const restWin = i === 0 && active ? currentOrbitRestWindow(seg, g, tFrom) : null;
+        const restWin = i === cur && active ? currentOrbitRestWindow(seg, g, tFrom) : null;
         if (!restWin) {
           rest.line.visible = false;
         } else {
@@ -250,11 +288,44 @@ export class TrajectoryLayer implements MapLayer {
         }
       });
       this.vertexCounts.set(id, counts);
+      this.elapsedCounts.set(id, elapsedCounts);
     }
 
     for (const id of [...this.ships.keys()]) {
       if (!seen.has(id)) this.drop(id);
     }
+  }
+
+  /** The segment's elapsed piece in a preview (S5-16): solid, faded; hidden otherwise. */
+  private showElapsed(
+    sl: SegmentLines,
+    seg: Segment,
+    g: ConicGeometry,
+    now: number,
+    t: number,
+    frameBodyId: string,
+    frameBodyWorld: Vec3,
+    frame: MapFrame,
+    rgb: [number, number, number],
+    alpha: number,
+  ): number {
+    const p = sl.elapsed;
+    const win = elapsedWindow(seg, g, now, t);
+    if (!win) {
+      p.line.visible = false;
+      return 0;
+    }
+    samplePieceInto(this.world!.system, seg, g, frameBodyId, win[0], win[1], p.poly);
+    const n = writeTrajectoryVertices(
+      p.positions,
+      p.poly,
+      -Infinity,
+      null,
+      frameBodyWorld,
+      frame.origin,
+    );
+    this.show(p, n, rgb, alpha * ELAPSED_FADE, false, frame.camera, false);
+    return n;
   }
 
   private show(
@@ -300,6 +371,7 @@ export class TrajectoryLayer implements MapLayer {
         main: createPiece(this.scene, `trajectory:${id}:${i}`),
         last: createPiece(this.scene, `trajectory:${id}:${i}:last`),
         rest: createPiece(this.scene, `trajectory:${id}:${i}:rest`),
+        elapsed: createPiece(this.scene, `trajectory:${id}:${i}:elapsed`),
       })),
     };
     this.ships.set(id, lines);
@@ -313,9 +385,11 @@ export class TrajectoryLayer implements MapLayer {
       disposePiece(this.scene, s.main);
       disposePiece(this.scene, s.last);
       disposePiece(this.scene, s.rest);
+      disposePiece(this.scene, s.elapsed);
     }
     this.ships.delete(id);
     this.vertexCounts.delete(id);
+    this.elapsedCounts.delete(id);
   }
 
   dispose(): void {

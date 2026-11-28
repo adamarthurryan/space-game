@@ -1,0 +1,40 @@
+/* The preview's look (S5-12). */
+
+.border {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 2px solid var(--color-preview);
+  pointer-events: none;
+}
+
+.badge {
+  position: absolute;
+  top: 40px; /* below the map toolbar */
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 3px 4px 3px 10px;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--color-panel) 90%, transparent);
+  border: 1px solid var(--color-preview);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.badge strong {
+  color: var(--color-preview);
+  letter-spacing: 0.08em;
+}
+
+.now {
+  height: 22px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+}

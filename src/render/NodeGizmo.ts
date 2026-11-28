@@ -216,11 +216,15 @@ export class NodeGizmo implements MapLayer {
     this.group.updateMatrixWorld(true);
   }
 
-  /** The selected node of the active ship, if it is reached and in front of the camera. */
+  /**
+   * The selected node of the active ship, if it is reached and in front of the camera. None in a
+   * preview: map editing is off there (S5-11).
+   */
   private findTarget(frame: MapFrame, view: ViewSnapshot): Target | null {
     const world = this.world;
     const sel = view.selected;
-    if (!world || sel?.kind !== 'node' || sel.shipId !== view.activeShipId) return null;
+    if (!world || view.previewing) return null;
+    if (sel?.kind !== 'node' || sel.shipId !== view.activeShipId) return null;
     const ship = world.ships[sel.shipId];
     const traj = world.derived.trajectories[sel.shipId];
     const node = ship?.plan.find((n) => n.id === sel.id);

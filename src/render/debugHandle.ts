@@ -5,11 +5,14 @@
  */
 
 import { meanOrbitNormal } from '../orbital/propagate';
+import { bodyWorldState } from '../sim/body';
+import { shipPointAt } from '../sim/world';
 import { useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { controllerPose, type CameraController } from './camera/controller';
 import type { TrajectoryLayer } from './layers/TrajectoryLayer';
 import type { MapFrame } from './mapFrame';
+import { viewTime } from './previewTime';
 import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 
 interface DebugSources {
@@ -149,6 +152,71 @@ function createProbes() {
     trajectoryVertices(id: string) {
       return sources.trajectories?.vertexCounts.get(id) ?? [];
     },
+    /** The vertices drawn per segment of a ship's elapsed route in a preview (S5-16). */
+    elapsedVertices(id: string) {
+      return sources.trajectories?.elapsedCounts.get(id) ?? [];
+    },
+    /** The timeline strip: its span and box, and each glyph's event and centre (S5-15). */
+    timeline() {
+      const strip = document.querySelector<HTMLElement>('[aria-label="Timeline strip"]');
+      if (!strip) return null;
+      const box = strip.getBoundingClientRect();
+      const glyphs = Array.from(strip.querySelectorAll<HTMLElement>('[data-strip-glyph]')).map(
+        (el) => {
+          const r = el.getBoundingClientRect();
+          return {
+            kind: el.dataset['stripGlyph'],
+            t: Number(el.dataset['t']),
+            shipId: el.dataset['ship'],
+            x: r.left + r.width / 2,
+            y: r.top + r.height / 2,
+          };
+        },
+      );
+      return {
+        span: Number(strip.dataset['span']),
+        box: { left: box.left, top: box.top, width: box.width, height: box.height },
+        glyphs,
+      };
+    },
+    /** The preview and the time the map is drawn at, or null (S5-15). */
+    preview() {
+      const p = useView.getState().preview;
+      return p ? { viewTime: p.t, sticky: p.sticky, frameT: frame().t } : null;
+    },
+    /** The clock, with any warp-to (S5-15). */
+    clock() {
+      const c = useWorld.getState().world.clock;
+      return { t: c.t, paused: c.paused, warpIndex: c.warpIndex, warpTo: c.warpTo };
+    },
+    /** A ship's world position as drawn this frame, or null if it isn't drawn (S5-15). */
+    shipWorld(id: string) {
+      const f = frame();
+      const k = f.ships.indexOf[id];
+      if (k === undefined) return null;
+      const w = f.ships.world;
+      return { x: w[3 * k]!, y: w[3 * k + 1]!, z: w[3 * k + 2]!, t: f.t };
+    },
+    /** A ship's world position at t predicted by its trajectory, or null (S5-15). */
+    shipPredicted(id: string, t: number) {
+      const w = useWorld.getState().world;
+      const p = shipPointAt(w, id, t);
+      if (!p) return null;
+      const b = bodyWorldState(w.system, p.parentId, t).r;
+      return {
+        x: b.x + p.state.r.x,
+        y: b.y + p.state.r.y,
+        z: b.z + p.state.r.z,
+        parentId: p.parentId,
+      };
+    },
+    /** A body's world position as drawn this frame (S5-15). */
+    bodyWorld(id: string) {
+      const f = frame();
+      const i = f.indexOf[id];
+      if (i === undefined) return null;
+      return { x: f.world[3 * i]!, y: f.world[3 * i + 1]!, z: f.world[3 * i + 2]!, t: f.t };
+    },
     /** The trajectory markers placed this frame. */
     trajectoryMarkers() {
       return sources.markers?.placed ?? [];
@@ -161,11 +229,11 @@ function createProbes() {
         status: s.status,
       }));
     },
-    /** A body's orbit normal at the current sim time. */
+    /** A body's orbit normal at the time the map is drawn at. */
     orbitNormal(id: string) {
       const { system, clock } = useWorld.getState().world;
       const orbit = system.bodies[id]?.orbit;
-      return orbit ? meanOrbitNormal(orbit, clock.t) : null;
+      return orbit ? meanOrbitNormal(orbit, viewTime(clock.t, useView.getState().preview)) : null;
     },
     /** Sim time, s. */
     simTime() {

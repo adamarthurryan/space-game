@@ -45,10 +45,12 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
     const p = local(e);
     return pick(frame, p.x, p.y);
   };
-  /** The ghost under the pointer, when nothing else is (S4-12). */
+  /** Map editing is off in a preview (S5-11): no ghost, no node drags. */
+  const previewing = () => useView.getState().preview !== null;
+  /** The ghost under the pointer, when nothing else is (S4-12); none in a preview. */
   const updateGhost = (e: MouseEvent, hit: MapObjectRef | null) => {
     const p = local(e);
-    const h = hit ? null : nearestOnPath(frame.paths, p.x, p.y);
+    const h = hit || previewing() ? null : nearestOnPath(frame.paths, p.x, p.y);
     frame.ghost = h
       ? { shipId: h.shipId, segmentIndex: h.segmentIndex, t: h.t, x: h.screenX, y: h.screenY }
       : null;
@@ -70,7 +72,7 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
         claim.moved = true;
         const view = useView.getState();
         view.select(claim.ref);
-        const fb = frameBodyOf(useWorld.getState().world, view.focus);
+        const fb = frameBodyOf(useWorld.getState().world, view.focus, frame.t);
         if (!gizmo.beginTimeDrag(claim.ref.shipId, claim.ref.id, fb, frame.t)) return;
       }
       gizmo.dragTo(p.x, p.y, frame, e);
@@ -115,7 +117,7 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
     }
     const hit = pick(frame, p.x, p.y);
     const active = useView.getState().activeShipId;
-    if (hit?.kind === 'node' && hit.shipId === active) {
+    if (hit?.kind === 'node' && hit.shipId === active && !previewing()) {
       take(e);
       claim = { kind: 'node', id: e.pointerId, x: p.x, y: p.y, moved: false, ref: hit };
       return;

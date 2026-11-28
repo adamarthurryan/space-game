@@ -1,0 +1,321 @@
+# Guide to the `ui/` and `render/` layers
+
+This guide describes the presentation layers as they stand at the end of milestone 1, sprint 4: the React panels in `src/ui/`, the three.js map in `src/render/`, and the two stores in `src/store/` that join them to the simulation. It is a map of the code for someone about to change it. The rules behind it are in [architecture.md](architecture.md) (see "Units, precision and rendering scale" and "State management and persistence"). The UI design is in [interface.md](interface.md), and the reasons for each choice are in [decisions.md](decisions.md) and in the sprint plans, which the code cites as `S<sprint>-<n>` (for example, S3-2 is decision 2 of `planning/sprint-3.md`).
+
+## 1. The big picture
+
+```
+ main.tsx ─▶ ui/layout/AppShell ─┬─ TopBar
+                                 ├─ LeftSidebar ─ SystemTree | FleetList (+ SpawnShipForm)
+                                 ├─ MapView ─┬─ render/Scene.tsx ─▶ MapRenderer (plain three.js)
+                                 │           ├─ MapToolbar
+                                 │           ├─ PreviewBadge
+                                 │           └─ useMapKeys()
+                                 ├─ Inspector ─ BodyInspector | ShipInspector (+ PlanSection) | NodeEditor
+                                 └─ Timeline ─ PauseOnMenu, WarpToButtons, TimelineStrip
+
+                 ┌──────────── store/ ─────────────┐
+                 │ useWorld: world (mutated in      │ ◀── actions from ui/ and render/input
+                 │   place), version, events,       │
+                 │   action wrappers, useSimTime    │
+                 │ useView: selection, focus,       │ ◀── clicks, keys, tree, map picking
+                 │   active ship, preview, panels,  │
+                 │   requests                       │
+                 └──────────────────────────────────┘
+                                 │
+                     game/actions.ts ─▶ sim/, orbital/, …
+```
+
+The layer order, lowest first, is `math → orbital → sim → planning → knowledge → economy → gen → game → store → render → ui`. ESLint (`eslint-plugin-boundaries`, in `eslint.config.js`) enforces it. In practice this means:
+
+- `render/` may import `store/` and everything below it, but **not `ui/`**. When the map needs a UI-side helper, `ui/` passes it in. The trajectory marker texts use `formatDistance` and `formatCountdown` from `ui/format.ts`, which `MapView` hands to `<Scene>` as props.
+- `ui/` may import `render/`. Only `ui/layout/MapView.tsx` does, to mount `<Scene>`.
+- React and three.js are allowed only in `store/`, `render/` and `ui/`. Everything below `store/` is plain, deterministic TypeScript.
+
+### Two ways of updating
+
+The two layers update in different ways, and most of the code follows from that.
+
+| | `render/` (the map) | `ui/` (the panels) |
+|---|---|---|
+| Driven by | A `requestAnimationFrame` loop in `MapRenderer` | React re-renders |
+| Reads the world | Every frame, directly: `useWorld.getState().world` | Through store selectors, when `version` changes, or at 10 Hz via `useSimTime` |
+| Reads the view | Once per frame, into a `ViewSnapshot` | `useView(selector)` hooks |
+| Allocation | None per frame: shared typed arrays in `MapFrame` | Normal React |
+| Changes the world | Pointer input and the gizmo call store actions | Buttons and fields call store actions |
+
+## 2. The stores (`src/store/`)
+
+The stores are the only link between the panels, the map and the sim.
+
+### `useWorld.ts`
+
+- **`world`**: the whole sim state as plain data. It is **mutated in place**. The clock stage advances it every frame without telling zustand. The object is replaced only on reset, so `useWorld(s => s.world)` alone does not re-render on change.
+- **`version`**: a counter, bumped by every successful action and by any frame in which the clock handled sim events. **Components subscribe to `version` to learn that the world has changed.** The usual idiom is:
+
+  ```tsx
+  const world = useWorld((s) => s.world);
+  useWorld((s) => s.version); // re-render when the world changes
+  ```
+
+- **Action wrappers**: `togglePause`, `warpUp`, `spawnShip`, `addNode`, `addNodeAt`, `editNode`, `deleteNode`, `snapNode`, `setPauseOn`, `warpToNode`, and others. Each is `act(w => actions.X(w, …))`: it calls the matching function in `game/actions.ts`, and bumps `version` if the result is `ok`. Every player action goes this way. Neither layer mutates the world itself.
+- **`events`**: the sim event registry, which the clock stage passes to `advanceWorld`.
+- **`useSimTime(hz = 10)`**: polls `world.clock.t` and re-renders the caller at most `hz` times a second. Use it for any readout that follows time: dates, countdowns, the current orbit.
+
+Actions return an `ActionResult` (`{ ok: true, value }` or `{ ok: false, error }`). The UI shows `error` where it makes sense; see `NodeEditor`'s `err()` helper.
+
+### `useView.ts`
+
+This store holds view state that is not saved:
+
+- `selected` and `hovered` are `MapObjectRef`s: `{kind:'body'|'ship', id}` or `{kind:'node', shipId, id}`. The selection drives the inspector and the highlights.
+- `focus` is a `FocusRef` (a body or a ship) and drives the camera. `focusOn(ref)` focuses and selects in one call. A node focuses its ship (`focusRefOf`).
+- `activeShipId` is the ship whose plan can be edited: the last ship selected, directly or through one of its nodes. Read it through `resolveActiveShip(world, id)`, which drops destroyed or missing ships.
+- **Requests as counters.** `focusSeq` and `snapRequest.seq` exist so that a repeated request (refocusing the same body, snapping again) still triggers. `CameraStage` subscribes and reacts when a seq changes. The camera's animated state is *not* in the store. It lives in the camera controller.
+- Panel state: `leftPanelOpen`, `rightPanelOpen`, `leftTab`, `expanded` (the System tree), `spawnFormOpen`.
+- `preview` is `{ t, sticky } | null` (sprint 5): the map is drawn at `preview.t` instead of now. `startPreview`, `movePreview` (keeps `sticky`) and `endPreview` change it. It is view state only: nothing below `store/` ever sees it. `render/previewTime.ts` has `viewTime(clockT, preview)`, the time the map is drawn at.
+- Helpers: `sameRef(a, b)` and `focusRefOf(ref)`.
+
+## 3. The render layer (`src/render/`)
+
+### 3.1 Lifecycle: `Scene.tsx` and `MapRenderer.ts`
+
+`Scene.tsx` is the only React component on the map apart from the two DOM overlays. It:
+
+1. builds a `MapFrame` for the current body system (`createMapFrame`, memoised on `world.system`);
+2. builds the label registry and the trajectory marker registry;
+3. in an effect, creates a `MapRenderer` on a host `<div>`, calls `start()`, and calls `dispose()` on cleanup;
+4. renders `<TrajectoryMarkerOverlay>` and `<LabelOverlay>` over the canvas.
+
+A new body system means a new frame, and so a new renderer. Everything else lives inside `MapRenderer`.
+
+`MapRenderer` owns the `WebGLRenderer` (with a logarithmic depth buffer, ACES tone mapping, and a pixel ratio capped at 2), the `Scene`, a `PerspectiveCamera` with fixed near and far planes (1e-3 km and 1e12 km), a `ResizeObserver`, the input listeners, the layers and the animation loop. **It is the only place in `render/` that reads the wall clock.** The loop gets `dtWall` from the rAF timestamp and passes it down.
+
+The constructor:
+
+- creates `CameraStage` and the layers, in draw order: `BodyLayer`, `OrbitLayer`, `TrajectoryLayer`, `MarkerLayer`, `NodeGizmo`;
+- attaches **pointer input first**, then camera input, so that pointer input can claim gizmo and node drags before the camera sees the event;
+- subscribes to `useWorld` and calls `layer.sync(world)` on every layer when `version` or `world` changes;
+- registers debug sources (see §3.9).
+
+`renderFrame()` is the frame:
+
+```ts
+this.gizmo.flush();                         // apply the queued node edit (at most one per frame)
+for (const stage of STAGES) this.runStage(stage);
+this.renderer.render(this.scene, this.camera);
+```
+
+### 3.2 Frame stages (`stages.ts`)
+
+```ts
+STAGES = ['clock', 'bodies', 'ships', 'camera', 'projection', 'layers', 'labels']
+```
+
+| Stage | Function | Writes |
+|---|---|---|
+| clock | `clockStage(world, dtWall, events)`, which calls `advanceWorld`. If any events were handled or a warp-to arrived, `MapRenderer` bumps `version`. | the world |
+| bodies | `bodiesStage(frame, world, viewTime)`, which calls `updateFrameBodies`. `MapRenderer` reads the view time first, and ends a preview that now has caught up. | `frame.t` (the view time), `frame.now` (the clock), `frame.world` (body positions, float64) |
+| ships | `shipsStage`: `syncFrameShips` (reallocates the ship arrays only if the drawn set changed), then `updateFrameShips`, both from each ship's **trajectory** at `frame.t` (`shipPointAt`) | `frame.ships.*`; also takes the frame's `ViewSnapshot` |
+| camera | `CameraStage.update` | `frame.origin`, `frame.camera`, the three.js camera |
+| projection | `projectionStage`, which calls `projectFrame` | screen positions, depth, disc sizes, marker and merge flags |
+| layers | `layer.update(frame, view)` for each layer | three.js objects; `frame.paths` |
+| labels | `labelsStage`: label candidates, declutter, then trajectory markers | DOM spans; `frame.labels`, `frame.nodes` |
+
+The order matters. The sim advances before anything reads positions. Ships come before the camera, because the camera may follow a ship. Projection comes before the layers, because layers need this frame's disc sizes and merge flags. Labels come last, because they give way to everything else on screen.
+
+`ViewSnapshot` (`focus`, `selected`, `hovered`, `frameBodyId`, `activeShipId`, `previewing`) is read from `useView` **once per frame**, so every stage sees the same view.
+
+**Preview time.** Every stage after the clock uses `frame.t`, which is the preview time during a preview and `world.clock.t` otherwise. Use `frame.t` for anything drawn, and never `world.clock.t`. Ships are placed from their trajectory at `frame.t`, so a previewed ship is past its nodes and SOI changes, around the right parent. A ship whose trajectory doesn't reach `frame.t` isn't in `frame.ships`. `frame.now` is the clock's time, which the trajectory layer uses to draw the route flown during a preview. While `previewing` is true, map editing is off: the gizmo and the ghost node are hidden, and node glyphs can't be dragged.
+
+### 3.3 `MapFrame` (`mapFrame.ts`)
+
+`MapFrame` is the shared per-frame state: plain typed arrays, allocated once per body system, so the stages allocate nothing per frame. Per-body arrays are indexed in `frame.order` (`bodyOrder(system)`, parents before children), and `frame.indexOf[id]` maps a body ID to its index. Positions are packed: body `i` is at `world[3i..3i+2]`.
+
+- `t` (the view time), `now` (the clock's time), `order`, `indexOf`, `world` (Float64Array, km), `origin`, `camera` (`FrameCamera`: position relative to the origin, `forward`, `up`, `right`, `fovRad`, `width`, `height`, `pixelRatio`)
+- Projection: `screenX`, `screenY`, `depth` (Infinity when behind the camera), `discPx`, `sphereShown`, `markerShown`, `merged`
+- `ships: FrameShips`: the same arrays for coasting ships in `seq` order, plus `parentIndex`. They are reallocated only when the set changes, and layers detect that by **identity** (`this.ships?.ids !== fs.ids`).
+- `labels`, `nodes`, `paths` and `ghost`: results from later stages that picking and input read.
+
+Its core helpers:
+
+- `frameWorldInto(frame, i, out)` gives a body's world position.
+- `mapObjectWorldInto(frame, world, ref, out)` gives a body's or ship's world position. A ship that isn't drawn falls back to the body it is drawn around (`shipBodyAt`): the body it hit, or will hit at a previewed time.
+- `frameBodyOf(world, focus, t)` gives the body that trajectories are drawn relative to at `t`: the focused body, or a focused ship's parent then.
+
+### 3.4 Precision: camera-relative rendering (`precision.ts`)
+
+The GPU works in float32, and the solar system spans about 10¹⁰ km. **The scene origin is the camera focus.** Every position written to three.js is `world − origin`, with the subtraction done in float64 before the float32 write. Nothing on the GPU holds a world position.
+
+- `toOriginRelativeInto(out, world, origin, indices?)` handles packed arrays (markers).
+- `setObjectPosition(obj, world, origin)` and `setObjectPositionAt(obj, world, i, origin)` handle single objects (body meshes, the Sun's light).
+
+Lines (orbits, trajectories) follow the same rule: a sample relative to a parent or frame body is offset by `parentWorld − origin` in float64 (`writeOrbitLine`, `writeTrajectoryVertices`). Because vertices are rewritten each frame, line objects set `frustumCulled = false`.
+
+### 3.5 The camera (`camera/`)
+
+- **`controller.ts`**: pure TypeScript, with no three.js. A `CameraController` orbits the origin at `yaw` and `pitch` about a reference `pole`, at `logDistance` (log10 km). Its functions are `createController`, `zoomBy` (×2 per wheel notch, eased), `orbitBy`, `beginRefocus` (an eased 0.8 s move of origin and distance), `beginSnap` (look straight down a pole), `stepController(c, dtWall)`, `controllerOriginInto` (the origin, blended between the old and new focus during a refocus) and `controllerPose` (offset, forward and up, built from the pole basis so that pitch ±90° is not degenerate). The input helpers `wheelNotches` and `DRAG_THRESHOLD_PX` (4 px separates a click from a drag) are here too.
+- **`framing.ts`**: how far a refocus moves to. `framingDistance` is 3 × the apoapsis of the outermost major moon, or 8 × the body's radius if it has none; for the root it is 2 × the largest planet's apoapsis. `minDistance` is 1.05 × the radius. For ships, `framingDistanceOf` and `minDistanceOf` frame a ship at 2.5 × its distance from its parent.
+- **`CameraStage.ts`**: the three.js side. It subscribes to `useView` for `focusSeq` and `snapRequest`, steps the controller each frame, writes `frame.origin`, applies the pose to the three.js camera through a basis matrix (not `lookAt`), and fills `frame.camera` with `setFrameCamera`. `orbitPoleOf(world, ref)` gives the pole for the "Orbit plane" snap.
+
+### 3.6 Projection and picking
+
+- **`projection.ts`**: `projectFrame(frame, system, view)` does the screen math on the CPU, in float64, from `frame.camera`. For each body it computes the screen position, the depth, and the disc radius in px (angular radius over half the field of view). Thresholds: under 0.5 px the sphere is hidden; under 3 px a fixed-size marker is drawn; a body within 6 px of its parent's centre is `merged` and gets no marker or label. Ships merge the same way unless they are focused or selected. Other code uses this result rather than projecting again.
+- **`picking.ts`**: `pick(frame, x, y)` does screen-space picking over `MapFrame`, with no raycasting. Priority: node glyph > ship marker (unless behind a nearer disc) > the nearest disc under the cursor > label > the nearest body marker within 8 px.
+- **`pathPicking.ts`**: `nearestOnPath(paths, x, y)` finds the nearest point on the active ship's projected trajectory, interpolating its time. `TrajectoryLayer` fills `frame.paths` each frame, and the ghost node and node time drags use it.
+- **`screenDash.ts`**: `projectScenePoint` and `projectVerticesInto` project origin-relative scene points, and `screenLineDistances` gives the cumulative screen length used for dashes.
+
+### 3.7 Layers (`layers/`, `NodeGizmo.ts`)
+
+Every layer implements `MapLayer`:
+
+```ts
+interface MapLayer {
+  update(frame: MapFrame, view: ViewSnapshot): void; // every frame
+  sync?(world: World): void;                          // when the store version changes
+  dispose(): void;
+}
+```
+
+The rules are:
+
+- **One layer per kind of object**, iterating the world. There is no three.js object per entity class.
+- **Rebuild three.js objects only when the set of entities changes**: the system, the drawn ship set (by array identity), or a trajectory's `version`. Never rebuild per frame. Per frame, only write buffer contents and set `needsUpdate`.
+- **Keep the logic in pure modules.** Each layer pairs with a pure, tested module and applies its results to three.js.
+
+| Layer | Draws | Pure helpers |
+|---|---|---|
+| `BodyLayer` | One true-radius sphere per body (unlit for the star, Lambert shading for the rest), a point light at the Sun and a faint ambient light | `bodyStyle.ts` |
+| `OrbitLayer` | One `Line` per orbiting body, resampled from its mean elements at `t` every frame (256 segments) and starting at the body. Alpha = base × screen-size fade × per-vertex distance fade; brighter when focused, selected or hovered | `orbitFade.ts`, `orbitLineObject.ts` |
+| `TrajectoryLayer` | Each ship's trajectory segments. Each segment has three pieces: `main`; `last`, the faded final revolution before the segment's end; and `rest`, the rest of the current orbit after a node, for the active ship only. The pieces are drawn relative to `view.frameBodyId`, and the planned path after the first node is dashed | `trajectoryGeometry.ts`, `trajectoryMaterial.ts`, `screenDash.ts` |
+| `MarkerLayer` | One `THREE.Points` for body markers and one for ship triangles, with sizes in device px (0 = hidden) | `markerMaterial.ts`, `shipStyle.ts` |
+| `NodeGizmo` | Six Δv handles on the active ship's selected node, kept 60 px long on screen and drawn on top | `nodeGizmoMath.ts`, `nodeMarkers.ts` |
+
+**`trajectoryGeometry.ts`** is the core of the trajectory drawing:
+
+- `conicGeometry(sys, seg)` gives a segment's closed-form conic (perifocal `P`, `Q`, `e`, `p`, mean motion, period, `tPeri`).
+- `sampleSegmentInto` and `samplePieceInto` sample in **anomaly**, not time (E, H, or D = tan(ν/2)), so points are dense at periapsis. Each point's time comes from Kepler's equation without a solve, and each point is expressed relative to the frame body *at its own time*. A lunar flyby is therefore a hyperbola in the Moon's frame and the true geocentric path in Earth's.
+- `writeTrajectoryVertices` writes the float32 vertices: the ship's current position first, then the points after `t`.
+- `firstNodeSegment`, `lastRevolutionWindow` and `currentOrbitRestWindow` decide which pieces are drawn and which are dashed.
+
+`TrajectoryLayer` resamples the `main` piece every frame for a live ellipse in the frame body's own frame. Otherwise it caches the sample and rebuilds it after a quarter period, or when the frame body changes. Dashes are computed in screen space: per-vertex `lineDistance` in px on the CPU, then `DASH_PX` and `GAP_PX` in the shader.
+
+**Custom shaders** (`trajectoryMaterial.ts`, `markerMaterial.ts`) must include three's `logdepthbuf` chunks, or they will depth-fight with the log depth buffer. The trajectory material also includes the tone-mapping and colour-space chunks, so it looks like the built-in materials.
+
+**`NodeGizmo`** is a layer that also takes input. The handle cones are real meshes, hit with a `Raycaster` against invisible spheres (`hitHandle`). Handle drags (`beginHandleDrag`, `dragTo`) project the pointer motion onto the handle's screen axis, with a cubic sensitivity (Shift for fine, Alt for coarse). A modifier change re-anchors the drag so the value doesn't jump. Time drags (`beginTimeDrag`) sample the path *without* the node (`pathWithout` from `game/actions.ts`) and slide the node along it. **Edits are queued in `pending` and applied by `flush()` at the start of the next frame**, so a fast drag costs one trajectory recompute per frame, not one per pointer event.
+
+### 3.8 Input (`input/`)
+
+Both input modules attach DOM listeners to the canvas and return a detach function.
+
+- **`cameraInput.ts`**: the wheel zooms (non-passive, so it can `preventDefault`), and a left-button drag of 4 px or more orbits the camera, with pointer capture.
+- **`pointerInput.ts`**: hover sets `useView.hovered` and the cursor (`pointer`, `copy` over the ghost, `grab` over a handle). A click selects. A double-click calls `focusOn`. Over empty space, the active ship's path shows a **ghost node** (`frame.ghost`), and clicking there calls `addNode` and selects the new node. Presses on a gizmo handle, or on one of the active ship's nodes, are **claimed**: `stopImmediatePropagation()` keeps the camera listener (attached second) from seeing them. A claimed node press that doesn't move selects the node; one that moves becomes a time drag. Escape, F, Delete and the other map keys are in `ui/useMapKeys.ts`, not here.
+
+### 3.9 DOM overlays (`overlays/`)
+
+Labels and trajectory markers are DOM, not WebGL, for crisp text and easy styling. **React creates the spans; the labels stage positions them every frame by writing to the DOM directly**, through a registry, with no React re-render.
+
+- **`LabelOverlay.tsx`** renders one span per body and per coasting ship, and registers them in the `LabelRegistry` (`spans[i]`, `shipSpans`). It re-renders on `version` to pick up new ships.
+- **`labelLayout.ts`**: `measureLabels` (reads each span's size once, the first time it is laid out), `updateLabelCandidates` and `updateShipLabelCandidates` (anchors from the projection; hidden when merged, off screen or occluded), and `placeLabels`, which runs `declutter` and writes `transform` and visibility to the spans. It also stores `frame.labels` for picking.
+- **`declutter.ts`**: greedy placement by priority. The order is focus > selection > hover > star > planet > dwarf planet > ship > moon, then by radius. The focus and the selection are always placed.
+- **`TrajectoryMarkerOverlay.tsx`** and **`trajectoryMarkerLayout.ts`** manage a pool of spans for SOI enter and exit, impact, Pe and Ap (`trajectoryMarkers.ts`), node glyphs (`nodeMarkers.ts`) and the ghost. Glyphs are always shown. Texts are placed after the labels and hidden where they would overlap one. `frame.nodes` is filled here for picking.
+
+### 3.10 Debug handle (`debugHandle.ts`)
+
+In dev builds, `window.__spaceGame` exposes read-only probes: `camera()`, `body(id)`, `labels()`, `ship(id)` and `ships()`, `trajectory(id)` and `trajectoryVertices(id)`, `plan(id)`, `nodeScreen(nodeId)`, `ghost()`, `activePath()`, `gizmo()`, `trajectoryMarkers()`, `simTime()`, and from sprint 5 `timeline()`, `preview()`, `clock()`, `shipWorld(id)`, `shipPredicted(id, t)`, `bodyWorld(id)` and `elapsedVertices(id)`, and the two stores (`view`, `world`). `MapRenderer` registers its sources with `registerDebug(key, value)`. In production, `import.meta.env.DEV` is false and the probes are removed as dead code. The smoke tests in `test/smoke/*.mjs` drive the app through this handle. When you add something visible, add a probe for it and a smoke check.
+
+## 4. The UI layer (`src/ui/`)
+
+### 4.1 Layout (`ui/layout/`)
+
+- **`AppShell`** is a CSS grid: `TopBar`, `LeftSidebar`, `MapView`, `Inspector` and `Timeline`. A closed side panel is not rendered at all, and the `data-left` and `data-right` attributes shrink its column to 0.
+- **`LeftSidebar`** has ARIA tabs (System, Fleets, Stations, Routes), with arrow-key navigation and a placeholder for filters. System shows `SystemTree`, Fleets shows `FleetList`, and the other tabs show empty text.
+- **`MapView`** mounts `<Scene>` with the formatters, the `MapToolbar` (Ecliptic, Orbit plane and Focus buttons), the `PreviewBadge` (the amber border and the "PREVIEW" badge with a Now button, shown during a preview) and `useMapKeys()`. Esc ends a preview before it clears the selection.
+- **`Inspector`** switches on `selected.kind`: `ShipInspector`, `NodeEditor`, or `BodyInspector`, which also shows "Nothing selected".
+- **`Timeline`** has play and pause, warp down and up, the warp readout, `PauseOnMenu`, the warp-to buttons, the event strip and the date. The sprint 5 pieces are in `ui/timeline/`:
+  - `WarpToButtons`: ⏭ (warp to next event) and ◆⏭ (warp to node), and the ⏩ readout while a warp-to runs. A refused action's error becomes the button's title.
+  - `TimelineStrip`: the active ship's upcoming events (`sim/upcoming.ts`) as glyphs on a logarithmic axis from now (`scale.ts`), stacked by `stripLayout.ts`, with hover tooltips (`eventText.ts`). Pressing on the strip starts a transient preview that ends on release. Clicking a glyph starts a sticky preview at that event.
+- **`TopBar`** has the title, the panel toggles, and placeholder warning and alarm counts.
+
+### 4.2 Panels (`ui/panels/`)
+
+| Component | What it shows | Derived-data module |
+|---|---|---|
+| `SystemTree` | An ARIA tree of bodies. Click selects; double-click or Enter focuses; arrow keys navigate | — |
+| `FleetList` | Ships in spawn order with design, SOI and Δv; destroyed ships greyed out; "Spawn ship…" | `shipDetails.ts` |
+| `SpawnShipForm` | Design, parent and orbital elements, with presets | — (calls `spawnShip`) |
+| `BodyInspector` | Physical data, orbit and SOI at 10 Hz | `bodyDetails.ts` |
+| `ShipInspector` | Mass, propellant, engines, orbit and upcoming events; contains `PlanSection` | `shipDetails.ts` |
+| `PlanSection` | The node list, Δv totals, and "Add node ▾" (at Pe or Ap, or after a delay) | `planDetails.ts` |
+| `NodeEditor` | A node's time (absolute and relative), its Δv components, feedback (over budget, long burn, not reached, resulting orbit), and enable, snap and delete | `planDetails.ts` |
+
+### 4.3 Shared helpers
+
+- **`format.ts`**: `formatDate`, `formatWarp`, `formatDistance`, `formatSpeed`, `formatDuration`, `formatAngle`, `formatScientific`, `formatMass` and `formatCountdown`. All UI text with units goes through these, and `render/` receives some of them as props.
+- **`parse.ts`**: `parseSpeed`, `parseDuration` and `parseDate`, the inverses for typed input. They return `null` when the text can't be read.
+- **`fields/QuantityField.tsx`**: the editable value with units. It shows `format(value)`. Typing and then Enter or blur calls `parse`, then `onCommit`, which returns an error string or `null`. Escape reverts. The mouse wheel over a focused field nudges by a step (`nudge.ts`: Shift for fine, Alt for coarse); that listener is attached by hand because it must be non-passive. Errors appear under the field and the old value is kept.
+- **`useMapKeys.ts`**: the global shortcuts. Space pauses and plays, `,` and `.` change the warp, F focuses, E and P snap, Escape clears the selection, and Delete removes the selected node. Keys are ignored in text fields, Space is left to buttons, tabs and tree rows, and nothing fires when Ctrl, Alt or Meta is held.
+- **`theme.css`**: CSS custom properties for colour, layout sizes and type. Components use CSS modules (`*.module.css`) and look up classes as `styles['name']`.
+
+## 5. Common patterns
+
+### Reading the world in a component
+
+```tsx
+export function Thing({ id }: { id: ShipId }) {
+  const world = useWorld((s) => s.world);
+  useWorld((s) => s.version);        // structural changes: actions, sim events
+  const t = useSimTime();            // only if the panel shows values that follow time
+  const { focusOn } = useView.getState(); // actions: read once, no subscription
+  if (!world.ships[id]) return <p>Nothing selected</p>;
+  const d = shipDetails(world, id, t);    // pure derivation in a sibling .ts file
+  ...
+}
+```
+
+- Subscribe to the **narrowest** slice you need. Read actions with `getState()` rather than through a hook.
+- **Put the computation in a pure `xxxDetails.ts` module** next to the component, taking `(world, id, t)`. It is tested in the node environment, and the component only lays out the result.
+- A `useMemo` over the world must list `version` as a dependency, because the world object doesn't change identity (see `LabelOverlay`).
+
+### Changing the world
+
+Always go through the store's action wrappers: `useWorld.getState().editNode(...)`. Rules are checked in `game/actions.ts`. To add an action, write it in `game/actions.ts`, add an `act(...)` wrapper to `useWorld`, and call that. When an action creates something the user will want to edit next, select it: `addNode` followed by `select({kind:'node', …})`.
+
+### Writing map code
+
+- Put the logic in a pure module that reads and writes `MapFrame` or plain data, and test it headlessly. The three.js class only applies the result.
+- No per-frame allocation in stages and layers. Use module-level scratch vectors (`const scratch = vec3(0,0,0)`), preallocated typed arrays, and `…Into(out)` functions.
+- Write positions to the GPU only as `world − origin`, subtracted in float64.
+- Read the view from the `ViewSnapshot` passed to `update`, not from `useView` directly.
+- Rebuild objects only in response to `sync` or a change in identity or version. Dispose every geometry and material you create.
+- Name three.js objects (`orbit:earth`, `trajectory:<id>:<i>`), which helps when debugging.
+
+### Naming conventions
+
+- `…Into(…, out)` writes into a preallocated output and returns it.
+- `…Stage` functions are frame stages; `…Layer` classes are map layers.
+- `…Details` and `…details.ts` are pure derivations for panels.
+- `create…`, `begin…`/`end…`, and `sync`/`update`/`dispose` are used consistently across the layers.
+- Doc comments cite decision IDs (`S4-14`). Keep them when you edit the code, and add new ones when a sprint plan records a new decision.
+
+## 6. Testing
+
+- **Pure modules** (`projection`, `picking`, `pathPicking`, `trajectoryGeometry`, `orbitFade`, `declutter`, `camera/controller`, `camera/framing`, `nodeGizmoMath`, `nodeMarkers`, `screenDash`, the `ui/*Details` modules, `format`, `parse`) have `*.test.ts` files that run in Vitest's default `node` environment.
+- **React components** have `*.test.tsx` files that start with `// @vitest-environment jsdom` and use Testing Library. `ui/panels/testStores.ts` provides `resetStores()`, which gives a fresh sandbox world and the initial view; call it in `beforeEach`.
+- **three.js classes** (`MapRenderer`, the layers, `NodeGizmo`) are not unit tested. They are covered by `npm run smoke`, which runs Chrome headless against the dev server and uses `window.__spaceGame` (scripts in `test/smoke/`; see the `run-app` skill).
+
+## 7. Recipes
+
+**A new kind of object on the map:** add any per-frame position or projection arrays it needs to `MapFrame` (allocated on create or on set change), a pure module for its geometry or placement, and a `MapLayer` class in `layers/`. Add the class to the `layers` array in `MapRenderer` (the position sets draw order). If it is pickable, add it to `pick()` at the right priority. If it has a label, add candidates in `labelLayout.ts` and a priority tier in `declutter.ts`. Add a debug probe and a smoke check.
+
+**A new inspector section:** write a pure `xxxDetails(world, id, t)` with a test, a component that subscribes to `version` (and `useSimTime` if needed), and a case in `Inspector.tsx` or a section inside the matching inspector.
+
+**A new map shortcut:** add a case to `useMapKeys`. If it needs a camera reaction, add a request counter to `useView` and a subscription in `CameraStage`, following `snapRequest`.
+
+**A new editable quantity:** use `QuantityField` with a formatter from `format.ts`, a parser from `parse.ts`, a nudge step, and an `onCommit` that calls a store action and returns its error.
+
+## 8. Notes and loose ends
+
+- The `--color-map-bg` comment in `ui/theme.css` says to keep it in step with `render/Scene.tsx`, but the colour now lives in `MapRenderer.ts` (`BACKGROUND`).
+- `render/input/pointerInput.ts` defines its own `sameRef`, which duplicates the one exported from `store/useView.ts`.
+- `architecture.md`'s source layout lists folders that don't exist yet: `ui/fleet/`, `ui/planner/` and others, a minor-body layer in `render/layers/`, and `store/jobs.ts`. They are planned, not missing.

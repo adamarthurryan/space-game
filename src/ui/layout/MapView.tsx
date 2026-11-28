@@ -1,6 +1,7 @@
 import { Scene } from '../../render/Scene';
 import { formatCountdown, formatDistance } from '../format';
 import { MapToolbar } from '../map/MapToolbar';
+import { PreviewBadge } from './PreviewBadge';
 import { useMapKeys } from '../useMapKeys';
 import styles from './MapView.module.css';
 
@@ -11,6 +12,7 @@ export function MapView() {
     <main className={styles['map']} aria-label="System map">
       <Scene formatDistance={formatDistance} formatCountdown={formatCountdown} />
       <MapToolbar />
+      <PreviewBadge />
     </main>
   );
 }

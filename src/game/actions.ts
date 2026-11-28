@@ -10,8 +10,11 @@ import type { DesignId } from '../content/types';
 import { norm } from '../math/vec3';
 import { soiRadiusOf } from '../sim/body';
 import {
+  cancelWarpTo as cancelClockWarpTo,
   setPaused,
   setWarpIndex as setClockWarpIndex,
+  startWarpTo,
+  WARP_TO_NODE_LEAD,
   warpDown as clockWarpDown,
   warpUp as clockWarpUp,
 } from '../sim/clock';
@@ -21,6 +24,13 @@ import { PAUSABLE_EVENTS, type PausableEvent } from '../sim/clock';
 import { fallbackPole, MAX_NODES, MIN_NODE_LEAD, type NodeId } from '../sim/maneuver';
 import { createShip, shipStats, type OrbitState, type Ship, type ShipId } from '../sim/ship';
 import { computeTrajectory, segmentStateAt, type Segment } from '../sim/trajectory';
+import {
+  eventLabel,
+  MIN_WARP_TO,
+  nextWarpStop,
+  warpStopTime,
+  type UpcomingEvent,
+} from '../sim/upcoming';
 import { addShip, refreshShip, type World } from '../sim/world';
 
 export type ActionResult<T = void> = { ok: true; value: T } | { ok: false; error: string };
@@ -285,5 +295,49 @@ export function snapNode(
 /** Sets whether the clock pauses at one event type, or at all of them (S4-7). */
 export function setPauseOn(world: World, type: PausableEvent | 'all', on: boolean): ActionResult {
   for (const k of type === 'all' ? PAUSABLE_EVENTS : [type]) world.clock.pauseOn[k] = on;
+  return ok();
+}
+
+// ---- Warp-to (decisions S5-3 to S5-5 in planning/sprint-5.md) ------------------------------
+
+/** Warps to WARP_TO_NODE_LEAD before one of the ship's nodes, paused (S5-4). */
+export function warpToNode(world: World, shipId: ShipId, nodeId: NodeId): ActionResult {
+  const ship = plannable(world, shipId);
+  if (isFail(ship)) return ship;
+  const node = ship.plan.find((n) => n.id === nodeId);
+  if (!node) return fail(`Unknown node: ${nodeId}`);
+  if (!node.enabled) return fail('The node is disabled');
+  const segments = world.derived.trajectories[shipId]?.segments ?? [];
+  if (!segments.some((s) => s.endNodeId === nodeId)) return fail('The node is not reached');
+  const stop = node.t - WARP_TO_NODE_LEAD;
+  if (stop < world.clock.t + MIN_WARP_TO) return fail('The node is less than a minute away');
+  startWarpTo(world.clock, { t: stop, kind: 'node', shipId, label: 'Node' });
+  return ok();
+}
+
+/**
+ * Warps to the ship's next event, or to the earliest of any ship's if shipId is null (S5-5): a
+ * node stops WARP_TO_NODE_LEAD before it, any other event just after it is handled.
+ */
+export function warpToNextEvent(world: World, shipId: ShipId | null): ActionResult<UpcomingEvent> {
+  if (shipId !== null) {
+    const ship = plannable(world, shipId);
+    if (isFail(ship)) return ship;
+  }
+  const e = nextWarpStop(world, shipId);
+  if (!e) return fail('No upcoming events');
+  startWarpTo(world.clock, {
+    t: warpStopTime(e),
+    kind: e.kind === 'node' ? 'node' : 'event',
+    shipId: e.shipId,
+    label: eventLabel(world.system, e),
+  });
+  return { ok: true, value: e };
+}
+
+/** Ends a warp-to; the clock keeps running at its warp step. */
+export function cancelWarpTo(world: World): ActionResult {
+  if (!world.clock.warpTo) return fail('No warp-to in progress');
+  cancelClockWarpTo(world.clock);
   return ok();
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { calendarFromJd, jdFromSimTime } from '../../math/time';
 import type { LocalDv } from '../../orbital/frames';
 import { useView } from '../../store/useView';
@@ -67,6 +68,7 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
   const now = useSimTime();
   const store = useWorld.getState();
   const { select } = useView.getState();
+  const [warpError, setWarpError] = useState<string | null>(null);
   const ship = world.ships[shipId];
   const node = ship?.plan.find((n) => n.id === nodeId);
   if (!ship || !node) return <p className={styles['empty']}>The node no longer exists</p>;
@@ -150,7 +152,20 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
         >
           Delete
         </button>
+        <button
+          type="button"
+          className={styles['action']}
+          title="Warp to 1 min before the node, paused"
+          onClick={() => setWarpError(err(store.warpToNode(shipId, nodeId)))}
+        >
+          Warp to node
+        </button>
       </div>
+      {warpError && (
+        <p role="alert" className={styles['error']}>
+          {warpError}
+        </p>
+      )}
     </section>
   );
 }

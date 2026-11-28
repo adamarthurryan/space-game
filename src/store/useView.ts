@@ -31,6 +31,16 @@ export const sameRef = (a: MapObjectRef | null, b: MapObjectRef | null): boolean
 /** Planes the camera can snap to (S2-12). */
 export type SnapPlane = 'ecliptic' | 'selected-orbit';
 
+/**
+ * A look at the future (S5-9 in planning/sprint-5.md): the map is drawn at `t`. A transient
+ * preview follows a drag of the timeline and ends on release; a sticky one stays until Esc,
+ * Now, or the clock catching up.
+ */
+export interface Preview {
+  t: number;
+  sticky: boolean;
+}
+
 /** Tabs of the left sidebar. */
 export type LeftTab = 'system' | 'fleets' | 'stations' | 'routes';
 
@@ -53,6 +63,8 @@ interface ViewState {
   expanded: Record<BodyId, boolean>;
   /** Whether the Fleets tab shows the spawn form (S3-14). */
   spawnFormOpen: boolean;
+  /** The preview, or null when the map shows now (S5-9). */
+  preview: Preview | null;
   toggleLeftPanel(): void;
   toggleRightPanel(): void;
   setLeftTab(tab: LeftTab): void;
@@ -65,6 +77,10 @@ interface ViewState {
   toggleExpanded(id: BodyId): void;
   setSpawnFormOpen(open: boolean): void;
   setExpanded(id: BodyId, expanded: boolean): void;
+  startPreview(t: number, sticky: boolean): void;
+  /** Moves the preview, keeping whether it is sticky; does nothing without one. */
+  movePreview(t: number): void;
+  endPreview(): void;
   /** Expands every listed body (no change, and no update, if all are expanded). */
   expand(ids: readonly BodyId[]): void;
 }
@@ -85,6 +101,7 @@ export const useView = create<ViewState>()((set) => ({
   snapRequest: null,
   expanded: { sun: true },
   spawnFormOpen: false,
+  preview: null,
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftTab: (tab) => set({ leftTab: tab }),
@@ -100,6 +117,9 @@ export const useView = create<ViewState>()((set) => ({
     })),
   snapTo: (plane) => set((s) => ({ snapRequest: { plane, seq: (s.snapRequest?.seq ?? 0) + 1 } })),
   setSpawnFormOpen: (open) => set({ spawnFormOpen: open }),
+  startPreview: (t, sticky) => set({ preview: { t, sticky } }),
+  movePreview: (t) => set((s) => (s.preview ? { preview: { t, sticky: s.preview.sticky } } : s)),
+  endPreview: () => set((s) => (s.preview ? { preview: null } : s)),
   toggleExpanded: (id) => set((s) => ({ expanded: { ...s.expanded, [id]: !s.expanded[id] } })),
   setExpanded: (id, value) => set((s) => ({ expanded: { ...s.expanded, [id]: value } })),
   expand: (ids) =>

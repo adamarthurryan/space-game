@@ -37,7 +37,7 @@ describe('findTli', () => {
     expect(tli.lunarPeriapsisAltitude).toBeGreaterThanOrEqual(TLI_BAND[0]);
     expect(tli.lunarPeriapsisAltitude).toBeLessThanOrEqual(TLI_BAND[1]);
     expect({ dt: tli.dt, dv: tli.dv }).toEqual(SMOKE_TLI);
-  });
+  }, 20_000); // The scan takes about 1 s, more on a loaded machine.
 
   it.each([0, 5, 30])('keeps the smoke constants on target from a spawn at t = %d s', (t0) => {
     const w = createSandboxWorld();

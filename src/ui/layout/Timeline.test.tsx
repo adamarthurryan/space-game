@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../../gen/scenario';
 import { useWorld } from '../../store/useWorld';
+import { setUpLunar } from '../timeline/testLunar';
 import { Timeline } from './Timeline';
 
 beforeEach(() => {
@@ -49,5 +50,16 @@ describe('Timeline', () => {
     await user.click(slower);
     expect(warp()).toBe('×10⁶');
     expect(clock().warpIndex).toBe(6);
+  });
+
+  it('cancels a warp-to with Pause (S5-3)', async () => {
+    const user = userEvent.setup();
+    setUpLunar();
+    render(<Timeline />);
+    await user.click(screen.getByRole('button', { name: 'Warp to next event' }));
+    expect(clock().warpTo).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(clock().warpTo).toBeNull();
+    expect(clock().paused).toBe(true);
   });
 });

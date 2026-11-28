@@ -48,6 +48,8 @@ export interface ViewSnapshot {
   frameBodyId: BodyId;
   /** The active ship, if it is coasting (S4-9). */
   activeShipId: ShipId | null;
+  /** Whether the map is drawn at a preview time, not now: map editing is off (S5-11). */
+  previewing: boolean;
 }
 
 /** One kind of object on the map, as a plain three.js layer. */
@@ -60,15 +62,20 @@ export interface MapLayer {
 
 /**
  * Clock stage: advances the world by a frame of wall time, stopping at every sim event on the
- * way (S3-9). Returns whether any event was handled, so the caller can bump the store version.
+ * way (S3-9). Returns whether any event was handled or a warp-to arrived (S5-14), so the caller
+ * can bump the store version.
  */
 export function clockStage(world: World, dtWall: number, events: EventRegistry): boolean {
-  return advanceWorld(world, dtWall, events).events > 0;
+  const r = advanceWorld(world, dtWall, events);
+  return r.events > 0 || r.arrived;
 }
 
-/** Bodies stage: every body's world position at the new t. */
-export function bodiesStage(frame: MapFrame, world: World): void {
-  updateFrameBodies(frame, world.system, world.clock.t);
+/**
+ * Bodies stage: the frame's time, which is the preview time or now (S5-10), and every body's
+ * world position at it.
+ */
+export function bodiesStage(frame: MapFrame, world: World, viewTime: number): void {
+  updateFrameBodies(frame, world.system, viewTime, world.clock.t);
 }
 
 /**

@@ -15,13 +15,15 @@ const tli = (text: string, pattern: RegExp) => {
 };
 
 describe('the smoke test’s TLI', () => {
-  it('matches SMOKE_TLI in src/gen/lunarMission.ts', () => {
-    const smoke = tli(read('maneuvers.mjs'), /const TLI = \{ dt: ([\d.]+), dv: ([\d.]+) \}/);
-    const source = tli(
-      read('../../src/gen/lunarMission.ts'),
-      /SMOKE_TLI = \{ dt: ([\d.]+), dv: ([\d.]+) \}/,
-    );
-    expect(smoke).not.toBeNull();
-    expect(smoke).toEqual(source);
-  });
+  for (const file of ['maneuvers.mjs', 'timeline.mjs']) {
+    it(`in ${file} matches SMOKE_TLI in src/gen/lunarMission.ts`, () => {
+      const smoke = tli(read(file), /const TLI = \{ dt: ([\d.]+), dv: ([\d.]+) \}/);
+      const source = tli(
+        read('../../src/gen/lunarMission.ts'),
+        /SMOKE_TLI = \{ dt: ([\d.]+), dv: ([\d.]+) \}/,
+      );
+      expect(smoke).not.toBeNull();
+      expect(smoke).toEqual(source);
+    });
+  }
 });

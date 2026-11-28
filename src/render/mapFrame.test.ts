@@ -81,7 +81,7 @@ describe('MapFrame ships', () => {
 
   it('frames trajectories on the focus body, or a focused ship parent', () => {
     const world = createSandboxWorld();
-    expect(frameBodyOf(world, { kind: 'body', id: 'mars' })).toBe('mars');
-    expect(frameBodyOf(world, { kind: 'ship', id: 'ship-3' })).toBe('moon');
+    expect(frameBodyOf(world, { kind: 'body', id: 'mars' }, 0)).toBe('mars');
+    expect(frameBodyOf(world, { kind: 'ship', id: 'ship-3' }, 0)).toBe('moon');
   });
 });

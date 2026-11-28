@@ -94,4 +94,16 @@ describe('NodeEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Snap to Ap' }));
     expect(useWorld.getState().world.ships['ship-2']!.plan[0]!.t).not.toBe(1000);
   });
+
+  it('warps to the node, or shows why not (S5-4)', () => {
+    const { nodeId } = setUp();
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Warp to node' }));
+    const w = useWorld.getState().world;
+    expect(w.clock.warpTo).toMatchObject({ t: SMOKE_TLI.dt - 60, kind: 'node' });
+    expect(nodeId).toBeTruthy();
+    w.clock.t = SMOKE_TLI.dt - 30;
+    fireEvent.click(screen.getByRole('button', { name: 'Warp to node' }));
+    expect(screen.getByRole('alert').textContent).toBe('The node is less than a minute away');
+  });
 });

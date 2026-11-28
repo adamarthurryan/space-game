@@ -28,7 +28,13 @@ describe('world', () => {
   it('holds the system and a running clock', () => {
     const w = createWorld(system, 7);
     expect(w.system).toBe(system);
-    expect(w.clock).toEqual({ t: 7, warpIndex: 0, paused: false, pauseOn: DEFAULT_PAUSE_ON });
+    expect(w.clock).toEqual({
+      t: 7,
+      warpIndex: 0,
+      paused: false,
+      pauseOn: DEFAULT_PAUSE_ON,
+      warpTo: null,
+    });
   });
 
   it('survives a JSON round trip', () => {

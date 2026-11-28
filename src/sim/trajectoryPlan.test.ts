@@ -4,7 +4,7 @@ import type { ManeuverNode } from './maneuver';
 import { applyNode } from './maneuver';
 import type { OrbitState } from './ship';
 import { MU_PLANET, PLANET_RADIUS, syntheticSystem } from './testSystem';
-import { computeTrajectory, HORIZON_CAP, segmentStateAt } from './trajectory';
+import { computeTrajectory, HORIZON_CAP, segmentStateAt, trajectoryStateAt } from './trajectory';
 
 const sys = syntheticSystem();
 const R = 7000;
@@ -97,5 +97,34 @@ describe('computeTrajectory with a plan', () => {
     expect(a).toEqual(b);
     // JSON writes −0 as 0 (an equatorial orbit propagates to z = −0), so compare the text.
     expect(JSON.stringify(JSON.parse(JSON.stringify(a)))).toBe(JSON.stringify(a));
+  });
+});
+
+describe('trajectoryStateAt (S5-10)', () => {
+  const plan = [node('a', 1000, 0.5), node('b', 3000, 0.3)];
+  const segs = computeTrajectory(sys, leo, { plan });
+
+  it('evaluates the segment containing t, in its parent frame', () => {
+    const t = 2000;
+    const p = trajectoryStateAt(sys, segs, t)!;
+    expect(p.segmentIndex).toBe(1);
+    expect(p.parentId).toBe(segs[1]!.parentId);
+    expect(p.state).toEqual(segmentStateAt(sys, segs[1]!, t));
+  });
+
+  it('gives the later segment at a boundary: the post-burn state at a node', () => {
+    const p = trajectoryStateAt(sys, segs, 1000)!;
+    expect(p.segmentIndex).toBe(1);
+    expect(p.state.v).toEqual(segs[1]!.v0);
+  });
+
+  it('is null outside the trajectory', () => {
+    expect(trajectoryStateAt(sys, segs, -1)).toBeNull();
+    expect(trajectoryStateAt(sys, segs, segs.at(-1)!.tEnd + 1)).toBeNull();
+  });
+
+  it('equals the ship orbit propagated at the start', () => {
+    const p = trajectoryStateAt(sys, segs, 0)!;
+    expect(p.state.r).toEqual(leo.r);
   });
 });

@@ -1,6 +1,5 @@
 import { getBody, majorChildren, type BodyId, type BodySystem } from '../../sim/body';
-import { shipStateAt } from '../../sim/ship';
-import type { World } from '../../sim/world';
+import { shipBodyAt, shipPointAt, type World } from '../../sim/world';
 import type { MapObjectRef } from '../../store/useView';
 
 /** The farthest the camera goes from its focus, km (S2-10). */
@@ -48,28 +47,23 @@ export function shipFramingDistance(distanceFromParent: number, parentFraming: n
   );
 }
 
-/** The parent body a ship is drawn around: its current parent, or the body it hit. */
-function shipBodyOf(world: World, id: string): BodyId {
-  const ship = world.ships[id];
-  return ship?.destroyedAt?.bodyId ?? ship?.orbit.parentId ?? world.system.rootId;
-}
-
-/** The framing distance of a body or a ship at the world's current time (S2-11, S3-15). */
-export function framingDistanceOf(world: World, ref: MapObjectRef): number {
+/**
+ * The framing distance of a body or a ship at t: now, or the preview time (S2-11, S3-15,
+ * S5-10). A ship not drawn at t is framed like the body it is drawn around.
+ */
+export function framingDistanceOf(world: World, ref: MapObjectRef, t: number): number {
   if (ref.kind === 'body') return framingDistance(world.system, ref.id);
-  const ship = world.ships[ref.id];
-  const parentId = shipBodyOf(world, ref.id);
-  const parentFraming = framingDistance(world.system, parentId);
-  if (!ship || ship.status !== 'coasting') return parentFraming;
-  const r = shipStateAt(world.system, ship, world.clock.t).r;
+  const parentFraming = framingDistance(world.system, shipBodyAt(world, ref.id, t));
+  const point = shipPointAt(world, ref.id, t);
+  if (!point) return parentFraming;
+  const r = point.state.r;
   return shipFramingDistance(Math.hypot(r.x, r.y, r.z), parentFraming);
 }
 
-/** The minimum camera distance for a body or a ship. */
-export function minDistanceOf(world: World, ref: MapObjectRef): number {
+/** The minimum camera distance for a body or a ship at t. */
+export function minDistanceOf(world: World, ref: MapObjectRef, t: number): number {
   if (ref.kind === 'body') return minDistance(world.system, ref.id);
-  const ship = world.ships[ref.id];
-  return ship && ship.status === 'coasting'
+  return shipPointAt(world, ref.id, t)
     ? SHIP_MIN_DISTANCE
-    : minDistance(world.system, shipBodyOf(world, ref.id));
+    : minDistance(world.system, shipBodyAt(world, ref.id, t));
 }

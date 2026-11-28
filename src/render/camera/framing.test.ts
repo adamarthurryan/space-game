@@ -55,16 +55,16 @@ describe('ship framing', () => {
     expect(shipFramingDistance(1e6, 1.2e6)).toBe(1.2e6);
     expect(shipFramingDistance(0, 1e6)).toBe(SHIP_MIN_DISTANCE);
     const kestrel = { kind: 'ship', id: 'ship-1' } as const;
-    expect(framingDistanceOf(world, kestrel)).toBeCloseTo(
+    expect(framingDistanceOf(world, kestrel, 0)).toBeCloseTo(
       2.5 * (getBody(sys, 'earth').radius + 400),
       6,
     );
-    expect(minDistanceOf(world, kestrel)).toBe(0.05);
+    expect(minDistanceOf(world, kestrel, 0)).toBe(0.05);
   });
 
   it('frames bodies as before', () => {
     const mars = { kind: 'body', id: 'mars' } as const;
-    expect(framingDistanceOf(world, mars)).toBe(framingDistance(sys, 'mars'));
-    expect(minDistanceOf(world, mars)).toBe(minDistance(sys, 'mars'));
+    expect(framingDistanceOf(world, mars, 0)).toBe(framingDistance(sys, 'mars'));
+    expect(minDistanceOf(world, mars, 0)).toBe(minDistance(sys, 'mars'));
   });
 });

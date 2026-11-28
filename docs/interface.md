@@ -233,7 +233,7 @@ The designer is free-form, with no hull classes and no 3D layout (see [features.
 
 ## Timeline and time control
 
-- Play/pause, warp rate steps (×1 … ×10⁷), "warp to next event", and "warp to selected node".
+- Play/pause, warp rate steps (×1 … ×10⁷), "warp to next event", and "warp to selected node". A warp-to runs at up to ×10⁷, slows into its stop, and pauses there: **1 minute before a node** (so it can still be edited), or **just after any other event** (so the map shows the new frame). Playing, pausing or changing the warp cancels it.
 - The timeline strip shows upcoming events for **the selected ships, fleets or stations**, as set by the "Show" selector, which defaults to the active ship. Events shown:
   - nodes, and thrust arcs (drawn as bars);
   - SOI changes, closest approaches, docking, arrivals;
@@ -242,9 +242,11 @@ The designer is free-form, with no hull classes and no 3D layout (see [features.
 
   Events are coloured per object. Alarms show as ⏰ markers. Hovering shows details; clicking jumps the _preview_ to that time.
 
+  The strip's time axis is **logarithmic**, from now at the left edge to the end of the active ship's prediction (between 1 day and 10 years), so a node in 20 minutes and an arrival in 200 days fit together. Close events stack, then fold into a "+n".
+
 - Clicking an event in the timeline strip allows setting an alarm for that event.
-- **Preview scrubbing:** dragging the playhead forward lets you look at the future. It does not commit time. A clear visual mode (a tinted border and a "PREVIEW" badge) shows when the map is not at "now". Release or press Esc to return.
-- Warp automatically drops at alarms and every event that needs a decision.
+- **Preview scrubbing:** dragging on the strip looks at the future: the whole map is drawn at that time, with the route each ship flies until then drawn faded. It does not commit time, and the clock keeps running. A clear visual mode (a tinted border and a "PREVIEW" badge with a "Now" button) shows when the map is not at "now". Release to return. Clicking an event keeps the preview at that event until Esc, "Now", or the clock catching up. Map editing (the gizmo and placing nodes) is off during a preview. The inspector still shows now; showing it at the preview time comes with targets (milestone 1, sprint 7).
+- Warp automatically drops at alarms (sprint 6). No event drops it otherwise: the clock already stops at every event exactly, and Pause on is the only automatic stop.
 - **Pause on ▾:** a popover beside the time controls with a checkbox per event type (node execution, SOI change, impact) and "All events". When an event of a ticked type happens, the clock pauses exactly at it. By default it pauses on node execution only. Alarms (per event, with lead times) build on this later.
 
 ## Alarms and alerts

@@ -322,3 +322,29 @@ export function currentOrbitRestWindow(
   const end = Math.max(tFrom, seg.tStart) + g.period;
   return seg.tEnd < end ? [seg.tEnd, end] : null;
 }
+
+/**
+ * The window of a segment's elapsed piece in a preview (S5-16 in planning/sprint-5.md): the part
+ * flown between now and the preview time t, at most the last revolution of an ellipse before t.
+ * Null outside a preview, or if the segment isn't flown in that interval.
+ */
+export function elapsedWindow(
+  seg: Segment,
+  g: ConicGeometry,
+  now: number,
+  t: number,
+): [number, number] | null {
+  const from = Math.max(now, seg.tStart);
+  const to = Math.min(t, seg.tEnd);
+  if (!(to > from)) return null;
+  return [g.kind === 'elliptic' ? Math.max(from, to - g.period) : from, to];
+}
+
+/** The index of the segment containing t (the later one at a boundary), or -1 (S5-10). */
+export function segmentIndexAt(segments: readonly Segment[], t: number): number {
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const s = segments[i]!;
+    if (s.tStart <= t && t <= s.tEnd) return i;
+  }
+  return -1;
+}

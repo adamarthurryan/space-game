@@ -7,8 +7,8 @@
 
 import { vec3, type Vec3 } from '../math/vec3';
 import { bodyOrder, bodyWorldPositionsInto, type BodyId, type BodySystem } from '../sim/body';
-import { shipStateAt, type ShipId } from '../sim/ship';
-import type { World } from '../sim/world';
+import type { ShipId } from '../sim/ship';
+import { shipBodyAt, shipPointAt, type World } from '../sim/world';
 import type { NodeId } from '../sim/maneuver';
 import type { FocusRef } from '../store/useView';
 import type { ProjectedPolyline } from './pathPicking';
@@ -43,8 +43,10 @@ export interface PlacedLabel {
 }
 
 export interface MapFrame {
-  /** Sim time of this frame (bodies stage). */
+  /** The time this frame is drawn at: the preview time, or now (bodies stage, S5-10). */
   t: number;
+  /** The sim's time, `world.clock.t` (bodies stage); equals `t` unless previewing (S5-16). */
+  now: number;
   /** bodyOrder(system): the index order of every per-body array. */
   order: BodyId[];
   indexOf: Record<BodyId, number>;
@@ -135,6 +137,7 @@ export function createMapFrame(system: BodySystem): MapFrame {
   const n = order.length;
   return {
     t: 0,
+    now: 0,
     order,
     indexOf: Object.fromEntries(order.map((id, i) => [id, i])),
     world: new Float64Array(3 * n),
@@ -164,9 +167,18 @@ export function createMapFrame(system: BodySystem): MapFrame {
   };
 }
 
-/** Body positions stage: the frame's time and every body's world position at it. */
-export function updateFrameBodies(frame: MapFrame, system: BodySystem, t: number): void {
+/**
+ * Body positions stage: the frame's time (the preview time, or now) and every body's world
+ * position at it (S5-10).
+ */
+export function updateFrameBodies(
+  frame: MapFrame,
+  system: BodySystem,
+  t: number,
+  now: number = t,
+): void {
   frame.t = t;
+  frame.now = now;
   bodyWorldPositionsInto(system, frame.order, t, frame.world);
 }
 
@@ -178,17 +190,17 @@ export function frameWorldInto(frame: MapFrame, i: number, out: Vec3): Vec3 {
   return out;
 }
 
-/** The ships that are drawn: coasting, in seq order. */
-function drawnShipIds(world: World): ShipId[] {
+/** The ships that are drawn: coasting, with a trajectory that reaches t (S5-10), in seq order. */
+function drawnShipIds(world: World, t: number): ShipId[] {
   return Object.values(world.ships)
-    .filter((s) => s.status === 'coasting')
+    .filter((s) => s.status === 'coasting' && shipPointAt(world, s.id, t) !== null)
     .sort((a, b) => a.seq - b.seq)
     .map((s) => s.id);
 }
 
 /** Reallocates the ship arrays if the drawn ship set changed. Returns whether it did. */
 export function syncFrameShips(frame: MapFrame, world: World): boolean {
-  const ids = drawnShipIds(world);
+  const ids = drawnShipIds(world, frame.t);
   const cur = frame.ships.ids;
   if (ids.length === cur.length && ids.every((id, i) => id === cur[i])) return false;
   frame.ships = createFrameShips(ids);
@@ -197,15 +209,18 @@ export function syncFrameShips(frame: MapFrame, world: World): boolean {
 
 const scratchState = { r: vec3(0, 0, 0), v: vec3(0, 0, 0) };
 
-/** Ships stage: each ship's parent index and world position at frame.t. */
+/**
+ * Ships stage: each ship's parent index and world position at frame.t, from its trajectory, so
+ * a previewed ship is on the right conic around the right parent (S5-10).
+ */
 export function updateFrameShips(frame: MapFrame, world: World): void {
   const fs = frame.ships;
   for (let k = 0; k < fs.ids.length; k++) {
-    const ship = world.ships[fs.ids[k]!];
-    const p = ship ? (frame.indexOf[ship.orbit.parentId] ?? 0) : 0;
+    const point = shipPointAt(world, fs.ids[k]!, frame.t, scratchState);
+    const p = point ? (frame.indexOf[point.parentId] ?? 0) : 0;
     fs.parentIndex[k] = p;
-    if (!ship) continue;
-    const s = shipStateAt(world.system, ship, frame.t, scratchState);
+    if (!point) continue;
+    const s = point.state;
     fs.world[3 * k] = frame.world[3 * p]! + s.r.x;
     fs.world[3 * k + 1] = frame.world[3 * p + 1]! + s.r.y;
     fs.world[3 * k + 2] = frame.world[3 * p + 2]! + s.r.z;
@@ -225,16 +240,16 @@ export function mapObjectWorldInto(frame: MapFrame, world: World, ref: FocusRef,
       out.z = frame.ships.world[3 * k + 2]!;
       return out;
     }
-    const ship = world.ships[ref.id];
-    const bodyId = ship?.destroyedAt?.bodyId ?? ship?.orbit.parentId ?? world.system.rootId;
+    const bodyId = shipBodyAt(world, ref.id, frame.t);
     return frameWorldInto(frame, frame.indexOf[bodyId] ?? 0, out);
   }
   return frameWorldInto(frame, frame.indexOf[ref.id] ?? 0, out);
 }
 
-/** The body trajectories are drawn relative to: the focus, or a focused ship's parent (S3-16). */
-export function frameBodyOf(world: World, focus: FocusRef): BodyId {
-  if (focus.kind === 'body') return focus.id;
-  const ship = world.ships[focus.id];
-  return ship?.destroyedAt?.bodyId ?? ship?.orbit.parentId ?? world.system.rootId;
+/**
+ * The body trajectories are drawn relative to: the focus, or a focused ship's parent at t
+ * (S3-16, S5-10). A ship not drawn at t gives the body it hit, or its current parent.
+ */
+export function frameBodyOf(world: World, focus: FocusRef, t: number): BodyId {
+  return focus.kind === 'body' ? focus.id : shipBodyAt(world, focus.id, t);
 }

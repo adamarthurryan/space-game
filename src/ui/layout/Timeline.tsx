@@ -2,10 +2,12 @@ import { calendarFromJd, jdFromSimTime } from '../../math/time';
 import { WARP_STEPS, warpStep } from '../../sim/clock';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import { formatDate, formatWarp } from '../format';
+import { TimelineStrip } from '../timeline/TimelineStrip';
+import { WarpToButtons } from '../timeline/WarpToButtons';
 import { PauseOnMenu } from './PauseOnMenu';
 import styles from './Timeline.module.css';
 
-/** Time controls, the event strip (sprint 5) and the date. */
+/** Time controls, warp-to, the event strip and preview (sprint 5), and the date. */
 export function Timeline() {
   // Subscribing to the version re-renders the controls after every clock action.
   useWorld((s) => s.version);
@@ -55,7 +57,8 @@ export function Timeline() {
         {formatWarp(warpStep(clock))}
       </output>
       <PauseOnMenu />
-      <div className={styles['strip']} />
+      <WarpToButtons />
+      <TimelineStrip />
       <output className={styles['readout']} aria-label="Date">
         {date}
       </output>

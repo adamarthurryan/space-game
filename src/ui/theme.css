@@ -14,6 +14,7 @@
   --color-accent: #4fa3ff;
   --color-warning: #f0b43c;
   --color-danger: #ff5c5c;
+  --color-preview: #e8a33d; /* the preview border, badge and playhead (S5-12) */
 
   /* Layout */
   --left-width: 260px;

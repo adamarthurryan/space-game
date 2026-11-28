@@ -49,7 +49,7 @@ src/
   orbital/    elements.ts, kepler.ts, propagate.ts, soi.ts, lambert.ts, frames.ts, passages.ts,
               approach.ts, integrate.ts, lagrange.ts
   sim/        clock.ts, events.ts, body.ts, ship.ts, station.ts, fleet.ts,
-              trajectory.ts, maneuver.ts, thrustArc.ts, proximity.ts, alarms.ts,
+              trajectory.ts, maneuver.ts, upcoming.ts, thrustArc.ts, proximity.ts, alarms.ts,
               environment/ (radiation.ts, solar.ts), world.ts
   planning/   basic.ts, plane.ts, transfer.ts, rendezvous.ts, lowThrust.ts
   knowledge/  detection.ts, orbitDetermination.ts, assay.ts, display.ts
@@ -59,7 +59,7 @@ src/
   content/    types.ts, registry.ts, resources.ts, designs.ts, recipes.ts, structures.ts,
               modules/ (one file per module type)
   store/      useWorld.ts, useView.ts, jobs.ts, jobWorker.ts
-  render/     Scene.tsx (React host), MapRenderer.ts, stages.ts, mapFrame.ts, projection.ts,
+  render/     Scene.tsx (React host), MapRenderer.ts, stages.ts, mapFrame.ts, previewTime.ts, projection.ts,
               precision.ts, picking.ts, pathPicking.ts, screenDash.ts, trajectoryGeometry.ts,
               trajectoryMarkers.ts, trajectoryMaterial.ts, nodeMarkers.ts, NodeGizmo.ts, nodeGizmoMath.ts,
               layers/ (bodies, orbits, trajectories, markers, minor bodies), input/ (camera,
@@ -188,6 +188,7 @@ export const engines = [
 
 - **One renderer, one loop.** `render/MapRenderer.ts` owns the `WebGLRenderer`, the scene, the camera, a `ResizeObserver`, the map input listeners (`render/input/`) and the `requestAnimationFrame` loop; it is the only place in `render/` that reads the wall clock. `render/Scene.tsx` is the only React component apart from the DOM overlays: it creates the renderer in an effect, disposes it on unmount, and renders the label and trajectory-marker overlays (decision 91).
 - **Frame stages** run in the order of `STAGES` (`render/stages.ts`) and share a per-scene `MapFrame` of plain arrays (`render/mapFrame.ts`), allocated once per body system: the clock, body world positions, ship world positions, the camera (which sets the origin, and may follow a ship), the projection of every body and ship to the screen, the scene layers, then the labels and trajectory markers (decisions 84, 92). The clock stage runs `advanceWorld`, which handles sim events, before all render updates. The ship arrays are reallocated only when the set of drawn ships changes.
+- **The map is drawn at the view time** (decisions 144–146, 151): `frame.t` is the preview time during a preview, and the clock's `t` otherwise (`frame.now` is always the clock's). Bodies, orbit lines, ships, trajectories, node glyphs, the camera, framing and plane snapping all use `frame.t`. Ships are placed from their **trajectory** at that time (`shipPointAt`), not from `ship.orbit`, so a previewed ship is past its nodes and SOI changes, around the right parent; a ship whose trajectory doesn't reach it isn't drawn. Trajectories are drawn from `frame.t` on, and during a preview the route flown since now is drawn faded. Map editing is off in a preview.
 - **Layers** are classes (`render/layers/`: bodies, orbits, trajectories, markers, drawn in that order) with `update(frame, view)`, an optional `sync(world)` called when the store version changes, and `dispose()`. One layer per kind of object (all bodies, all orbits, all trajectories), iterating the world, rather than one object per entity. A layer rebuilds its three.js objects only when the set of entities changes, never per frame.
 - **Logic stays out of three.js:** projection, picking, decluttering, fades, framing and the camera controller are pure TypeScript modules, tested headlessly; the layers and the renderer only apply their results to three.js objects.
 - **Picking is screen-space** (`render/picking.ts`): from the projection stage, the nearest node glyph within reach, then the nearest ship marker within reach that isn't behind a nearer disc, then the nearest disc under the cursor, then a label, then the nearest body marker within a pixel radius (decisions 82, 110, 126). Where nothing is picked, the active ship's projected path gives the ghost node (`render/pathPicking.ts`). Map input uses DOM listeners on the canvas. The node gizmo's handles are real meshes, hit with a `Raycaster` from the same listeners, which claim gizmo and node drags (`stopImmediatePropagation`) before the camera input sees them (decision 127).
@@ -371,7 +372,9 @@ Ship and station stockpiles, facilities, crew and construction are advanced in *
   - alarms, and scenario events.
 - Handlers are registered by event type in an `EventRegistry` object passed to `advanceWorld` (`sim/events.ts`), so the queue doesn't import higher layers and no module-level state is shared. The store creates the registry with the ship handlers.
 - At each event, the handler decides whether to pause, drop warp, or continue. A handler that acts on an event of a type ticked in `pauseOn` asks to pause; `advanceWorld` then pauses the clock with `t` at that event's time exactly and handles nothing more that frame.
-- Physical state changes only at events: plan execution, docking, undocking, construction completion. **Preview time** is view state only. Rendering reads `viewTime`; the sim only advances `t`.
+- **Warp-to** (decisions 138–140): `clock.warpTo` (`{ t, kind, shipId, label }`) caps each frame's target at its stop, at an eased rate `clamp((stop − t) / 0.1 s, ×100, ×10⁷)`, so the clock slows into the stop over about a second. Events on the way are handled as usual; reaching the stop pauses the clock and clears the warp-to; a Pause-on event, play/pause or a warp change cancels it. The warp step is untouched. "Warp to node" stops 60 s before a node; "warp to next event" stops there for a node, and exactly at any other event, just after it is handled. `sim/upcoming.ts` lists a ship's upcoming events from its trajectory, for the timeline and for warp-to.
+- There are **no automatic warp drops** at events (decision 136): the event-driven clock already stops at every event exactly, and Pause on is the only automatic stop. Alarms (sprint 6) add "drop warp".
+- Physical state changes only at events: plan execution, docking, undocking, construction completion. **Preview time** is view state only (`useView.preview`). Rendering reads `viewTime`; the sim only advances `t`.
 
 ## Alarms
 

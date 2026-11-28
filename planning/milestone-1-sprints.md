@@ -92,8 +92,11 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 **Goal:** time is controlled from the timeline, and the future can be inspected.
 
 - `ui/timeline/`: play/pause, warp steps, "warp to next event", "warp to node". The strip shows the active ship's upcoming events (nodes, SOI changes, impact), with hover details.
-- Event-driven clock: `t` is clamped at the next event; warp drops at events that need a decision (node execution, predicted impact).
+- Event-driven clock: `t` is clamped at the next event. (Warp drops at events were dropped: no event needs the player's intervention yet, and Pause on ▾ stays the only automatic stop; alarms add "drop warp" in sprint 6.)
 - Preview scrubbing: `viewTime` as view state only, dragging the playhead, a tinted border and "PREVIEW" badge, Esc or release to return. Ghost positions of all objects at `viewTime`. Clicking an event jumps the preview to it.
+
+- **Detailed plan:** [sprint-5.md](sprint-5.md) (decisions S5-1 to S5-16).
+- **Outcome:** done; see the implementation notes in [sprint-5.md](sprint-5.md#implementation-notes) and decisions 136–152.
 
 **Done when:** at ×10⁶ warp, the clock stops exactly at a node instead of passing it, and scrubbing to the arrival time shows the ship and the Moon in their arrival positions without changing the sim.
 
@@ -114,6 +117,7 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 **Goal:** the Plan ▾ menu, with tools that produce ordinary nodes.
 
 - Set target from the context menu or a key; the inspector shows target distance and relative velocity.
+- The inspector in preview (from sprint 5): while the timeline is previewing, the inspector shows the selection's values at the preview time (orbit, SOI, Δv left after the nodes passed, target distance and relative velocity), marked as previewed.
 - `planning/basic.ts`: Change Pe, Change Ap, Circularise (at Pe / Ap / after time), Change inclination, Change LAN.
 - `planning/plane.ts`: Match planes with target (at AN/DN).
 - `planning/transfer.ts` (first part): Hohmann to target, with phase angle and the next window.

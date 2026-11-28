@@ -34,3 +34,17 @@ describe('the active ship (S4-9)', () => {
     expect(resolveActiveShip(world, null)).toBeNull();
   });
 });
+
+describe('preview (S5-9)', () => {
+  it('starts, moves keeping sticky, and ends', () => {
+    const v = useView.getState();
+    v.startPreview(100, true);
+    expect(useView.getState().preview).toEqual({ t: 100, sticky: true });
+    useView.getState().movePreview(200);
+    expect(useView.getState().preview).toEqual({ t: 200, sticky: true });
+    useView.getState().endPreview();
+    expect(useView.getState().preview).toBeNull();
+    useView.getState().movePreview(300);
+    expect(useView.getState().preview).toBeNull();
+  });
+});

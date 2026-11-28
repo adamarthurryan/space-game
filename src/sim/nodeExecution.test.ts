@@ -121,7 +121,7 @@ describe('node execution', () => {
     registerShipHandlers(reg);
     w.clock.t = 599;
     const r = advanceWorld(w, 0.1, reg); // aims for 699
-    expect(r).toEqual({ events: 1, pause: true });
+    expect(r).toEqual({ events: 1, pause: true, arrived: false });
     expect(w.clock.t).toBe(600);
     expect(w.ships['ship-2']!.plan.length).toBe(1);
     w.clock.paused = false;

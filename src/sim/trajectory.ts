@@ -97,6 +97,34 @@ export function segmentStateAt(
   }
 }
 
+/** A ship's state at a time, from its trajectory (S5-10). */
+export interface TrajectoryPoint {
+  segmentIndex: number;
+  parentId: BodyId;
+  /** In the segment's parent frame. */
+  state: StateVector;
+}
+
+/**
+ * The state at t from the segments (S5-10): the segment with tStart ≤ t ≤ tEnd, the later one
+ * at a boundary (so a node's time gives the post-burn state), in its parent's frame. Null if t is
+ * before the first segment's start or after the last one's end.
+ */
+export function trajectoryStateAt(
+  sys: BodySystem,
+  segments: readonly Segment[],
+  t: number,
+  out: StateVector = newState(),
+): TrajectoryPoint | null {
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const seg = segments[i]!;
+    if (seg.tStart <= t && t <= seg.tEnd) {
+      return { segmentIndex: i, parentId: seg.parentId, state: segmentStateAt(sys, seg, t, out) };
+    }
+  }
+  return null;
+}
+
 /** The body whose frame the next segment is in, after an SOI event; null otherwise. */
 function nextParent(sys: BodySystem, seg: Segment): BodyId | null {
   switch (seg.endEvent) {

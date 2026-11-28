@@ -2,11 +2,11 @@ import { Matrix4, Vector3, type PerspectiveCamera } from 'three';
 import { cross, normalize, vec3, type Vec3 } from '../../math/vec3';
 import { meanOrbitNormal } from '../../orbital/propagate';
 import { getBody } from '../../sim/body';
-import { shipStateAt } from '../../sim/ship';
-import type { World } from '../../sim/world';
+import { shipPointAt, type World } from '../../sim/world';
 import { focusRefOf, useView, type FocusRef } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { mapObjectWorldInto, type MapFrame } from '../mapFrame';
+import { viewTime } from '../previewTime';
 import { setFrameCamera } from '../projection';
 import {
   beginRefocus,
@@ -20,19 +20,24 @@ import {
 import { framingDistanceOf, minDistanceOf } from './framing';
 
 /**
- * The orbit pole of a body or ship at the world's current time: a body's mean orbit normal, or
- * a ship's r × v (S3-15). Null for the root or a destroyed ship.
+ * The orbit pole of a body or ship at t (now, or the preview time): a body's mean orbit normal,
+ * or a ship's r × v on its trajectory (S3-15, S5-10). Null for the root, or a ship not drawn at t.
  */
-export function orbitPoleOf(world: World, ref: FocusRef): Vec3 | null {
-  const { system, clock } = world;
+export function orbitPoleOf(world: World, ref: FocusRef, t: number): Vec3 | null {
+  const { system } = world;
   if (ref.kind === 'body') {
     const orbit = system.bodies[ref.id] ? getBody(system, ref.id).orbit : undefined;
-    return orbit ? meanOrbitNormal(orbit, clock.t) : null;
+    return orbit ? meanOrbitNormal(orbit, t) : null;
   }
-  const ship = world.ships[ref.id];
-  if (!ship || ship.status !== 'coasting') return null;
-  const s = shipStateAt(system, ship, clock.t);
+  const point = shipPointAt(world, ref.id, t);
+  if (!point) return null;
+  const s = point.state;
   return normalize(cross(s.r, s.v));
+}
+
+/** The time the map is drawn at: the preview's, or now (S5-10). */
+function currentViewTime(): number {
+  return viewTime(useWorld.getState().world.clock.t, useView.getState().preview);
 }
 
 /** The pole for a snap request, or null if the request can't be met. */
@@ -40,7 +45,9 @@ function snapPole(plane: 'ecliptic' | 'selected-orbit'): Vec3 | null {
   if (plane === 'ecliptic') return vec3(0, 0, 1);
   const selected = useView.getState().selected;
   // Evaluated once, at the time of the snap, then kept fixed (S2-12).
-  return selected ? orbitPoleOf(useWorld.getState().world, focusRefOf(selected)) : null;
+  return selected
+    ? orbitPoleOf(useWorld.getState().world, focusRefOf(selected), currentViewTime())
+    : null;
 }
 
 const right = new Vector3();
@@ -81,20 +88,22 @@ export class CameraStage {
     this.camera = camera;
     const world = useWorld.getState().world;
     const focus = useView.getState().focus;
+    const t = currentViewTime();
     this.controller = createController(
       focus,
-      framingDistanceOf(world, focus),
-      minDistanceOf(world, focus),
+      framingDistanceOf(world, focus, t),
+      minDistanceOf(world, focus, t),
     );
     this.focusWorld = (ref, out) => mapObjectWorldInto(frame, useWorld.getState().world, ref, out);
     this.unsubscribe = useView.subscribe((s, prev) => {
       if (s.focusSeq !== prev.focusSeq) {
         const w = useWorld.getState().world;
+        const t = currentViewTime();
         beginRefocus(
           this.controller,
           s.focus,
-          framingDistanceOf(w, s.focus),
-          minDistanceOf(w, s.focus),
+          framingDistanceOf(w, s.focus, t),
+          minDistanceOf(w, s.focus, t),
         );
       }
       if (s.snapRequest && s.snapRequest.seq !== prev.snapRequest?.seq) {

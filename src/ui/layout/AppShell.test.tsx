@@ -103,4 +103,20 @@ describe('AppShell', () => {
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'System' }).getAttribute('aria-selected')).toBe('true');
   });
+
+  it('Esc ends a sticky preview first, then clears the selection (S5-13)', async () => {
+    const user = userEvent.setup();
+    render(<AppShell />);
+    act(() => {
+      useView.getState().select({ kind: 'body', id: 'mars' });
+      useView.getState().startPreview(5000, true);
+    });
+    expect(screen.getByRole('status', { name: 'Preview' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(useView.getState().preview).toBeNull();
+    expect(useView.getState().selected).toEqual({ kind: 'body', id: 'mars' });
+    expect(screen.queryByRole('status', { name: 'Preview' })).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(useView.getState().selected).toBeNull();
+  });
 });

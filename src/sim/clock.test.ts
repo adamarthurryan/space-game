@@ -16,7 +16,13 @@ import {
 describe('clock', () => {
   it('starts running at ×1', () => {
     const c = createClock();
-    expect(c).toEqual({ t: 0, warpIndex: 0, paused: false, pauseOn: DEFAULT_PAUSE_ON });
+    expect(c).toEqual({
+      t: 0,
+      warpIndex: 0,
+      paused: false,
+      pauseOn: DEFAULT_PAUSE_ON,
+      warpTo: null,
+    });
     expect(warpRate(c)).toBe(1);
     expect(createClock(42).t).toBe(42);
   });

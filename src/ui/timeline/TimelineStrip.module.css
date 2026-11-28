@@ -1,0 +1,123 @@
+/* The timeline strip (S5-6 to S5-9): glyph rows above, tick labels below. */
+
+.strip {
+  position: relative;
+  flex: 1;
+  min-width: 120px;
+  height: 36px;
+  background: var(--color-panel-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-border);
+  pointer-events: none;
+}
+
+.tickLabel {
+  position: absolute;
+  bottom: 1px;
+  left: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+
+.now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--color-text);
+  pointer-events: none;
+}
+
+.horizon {
+  position: absolute;
+  top: 4px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--color-text-dim);
+}
+
+.glyph {
+  position: absolute;
+  top: 12px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.glyph[data-row='1'] {
+  top: 1px;
+}
+
+.selected {
+  font-size: 13px;
+}
+
+.disabled {
+  opacity: 0.5;
+}
+
+.overflow {
+  position: absolute;
+  top: 1px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-text-dim);
+  pointer-events: none;
+}
+
+.playhead {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-preview);
+  pointer-events: none;
+}
+
+.playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 8px;
+  height: 6px;
+  background: var(--color-preview);
+  border-radius: 1px;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 40px;
+  z-index: 10;
+  padding: 3px 6px;
+  background: var(--color-panel-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}

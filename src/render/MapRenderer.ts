@@ -20,6 +20,7 @@ import { NodeGizmo } from './NodeGizmo';
 import { OrbitLayer } from './layers/OrbitLayer';
 import { TrajectoryLayer } from './layers/TrajectoryLayer';
 import { frameBodyOf, type MapFrame } from './mapFrame';
+import { previewCaughtUp, viewTime } from './previewTime';
 import type { LabelRegistry } from './overlays/labelLayout';
 import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 import {
@@ -157,15 +158,27 @@ export class MapRenderer {
     this.camera.updateProjectionMatrix();
   }
 
+  /** The view for this frame, at the time the map is drawn at (S5-10). */
   private readView(world: World): ViewSnapshot {
-    const { focus, selected, hovered, activeShipId } = useView.getState();
+    const { focus, selected, hovered, activeShipId, preview } = useView.getState();
     return {
       focus,
       selected,
       hovered,
-      frameBodyId: frameBodyOf(world, focus),
+      frameBodyId: frameBodyOf(world, focus, viewTime(world.clock.t, preview)),
       activeShipId: resolveActiveShip(world, activeShipId),
+      previewing: preview !== null,
     };
+  }
+
+  /** The preview time, or now; a preview that now has caught up ends here (S5-9). */
+  private readViewTime(world: World): number {
+    const { preview, endPreview } = useView.getState();
+    if (previewCaughtUp(world.clock.t, preview)) {
+      endPreview();
+      return world.clock.t;
+    }
+    return viewTime(world.clock.t, preview);
   }
 
   /** One frame: the queued node edit (S4-8), every stage in order, then the draw. */
@@ -185,7 +198,7 @@ export class MapRenderer {
         }
         return;
       case 'bodies':
-        bodiesStage(frame, world);
+        bodiesStage(frame, world, this.readViewTime(world));
         return;
       case 'ships':
         this.view = this.readView(world);

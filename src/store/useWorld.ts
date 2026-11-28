@@ -9,6 +9,7 @@ import type { PausableEvent } from '../sim/clock';
 import type { NodeId } from '../sim/maneuver';
 import { createEventRegistry, registerShipHandlers, type EventRegistry } from '../sim/events';
 import type { ShipId } from '../sim/ship';
+import type { UpcomingEvent } from '../sim/upcoming';
 import type { World } from '../sim/world';
 
 /**
@@ -38,6 +39,9 @@ interface WorldState {
   deleteNode(shipId: ShipId, nodeId: NodeId): ActionResult;
   snapNode(shipId: ShipId, nodeId: NodeId, to: 'periapsis' | 'apoapsis'): ActionResult;
   setPauseOn(type: PausableEvent | 'all', on: boolean): ActionResult;
+  warpToNode(shipId: ShipId, nodeId: NodeId): ActionResult;
+  warpToNextEvent(shipId: ShipId | null): ActionResult<UpcomingEvent>;
+  cancelWarpTo(): ActionResult;
 }
 
 function createRegistry(): EventRegistry {
@@ -69,6 +73,9 @@ export const useWorld = create<WorldState>()((set, get) => {
     deleteNode: (id, nodeId) => act((w) => actions.deleteNode(w, id, nodeId)),
     snapNode: (id, nodeId, to) => act((w) => actions.snapNode(w, id, nodeId, to)),
     setPauseOn: (type, on) => act((w) => actions.setPauseOn(w, type, on)),
+    warpToNode: (id, nodeId) => act((w) => actions.warpToNode(w, id, nodeId)),
+    warpToNextEvent: (id) => act((w) => actions.warpToNextEvent(w, id)),
+    cancelWarpTo: () => act(actions.cancelWarpTo),
   };
 });
 

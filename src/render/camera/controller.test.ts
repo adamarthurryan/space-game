@@ -246,7 +246,12 @@ describe('ships', () => {
     const origin = vec3(0, 0, 0);
     let t = 0;
     controllerOriginInto(c, at(t), origin);
-    beginRefocus(c, kestrel, framingDistanceOf(world, kestrel), minDistanceOf(world, kestrel));
+    beginRefocus(
+      c,
+      kestrel,
+      framingDistanceOf(world, kestrel, 0),
+      minDistanceOf(world, kestrel, 0),
+    );
     let last = { ...controllerOriginInto(c, at(t), origin) };
     const dt = 1 / 60;
     // 6771 km apart; the blend moves at most 3 × gap × dt / duration, plus 8 km/s of orbit.
@@ -265,7 +270,7 @@ describe('ships', () => {
 
   it("a snap to a ship's orbit pole looks down −h/|h|", () => {
     const c = earthController();
-    const pole = orbitPoleOf(world, kestrel)!;
+    const pole = orbitPoleOf(world, kestrel, world.clock.t)!;
     const s = shipStateAt(world.system, world.ships['ship-1']!, world.clock.t);
     const h = cross(s.r, s.v);
     expect(angleBetween(pole, h)).toBeLessThan(1e-12);

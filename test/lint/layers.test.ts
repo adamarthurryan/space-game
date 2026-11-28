@@ -226,6 +226,25 @@ const cases: Case[] = [
     target: '../sim/maneuver',
     expected: [],
   },
+  // Sprint 5: warp-to and upcoming events (S5-2 to S5-5).
+  {
+    file: 'src/sim/bad.ts',
+    code: "import { warpToNode } from '../game/actions';\nexport const x = warpToNode;\n",
+    target: '../game/actions',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/game/ok.ts',
+    code: "import { nextWarpStop } from '../sim/upcoming';\nexport const x = nextWarpStop;\n",
+    target: '../sim/upcoming',
+    expected: [],
+  },
+  {
+    file: 'src/ui/ok.ts',
+    code: "import { upcomingEvents } from '../sim/upcoming';\nexport const x = upcomingEvents;\n",
+    target: '../sim/upcoming',
+    expected: [],
+  },
   {
     file: 'src/render/ok.ts',
     code: "import { useWorld } from '../store/useWorld';\nexport const x = useWorld;\n",

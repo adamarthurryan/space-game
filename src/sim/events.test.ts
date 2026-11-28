@@ -68,7 +68,7 @@ describe('advanceWorld', () => {
     const r = advanceWorld(w, 0.1, reg);
     expect(seen).toEqual([5]);
     expect(w.clock.t).toBe(10);
-    expect(r).toEqual({ events: 1, pause: false });
+    expect(r).toEqual({ events: 1, pause: false, arrived: false });
   });
 
   it('runs events at equal times in insertion order, and one exactly at the target', () => {
