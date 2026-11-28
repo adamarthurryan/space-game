@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { SMOKE_TLI } from '../../gen/lunarMission';
+import { presetOrbit } from '../../gen/sandboxShips';
 import { createSandboxWorld } from '../../gen/scenario';
+import { addNode, spawnShip } from '../../game/actions';
 import { getBody } from '../../sim/body';
 import {
   framingDistance,
@@ -7,8 +10,7 @@ import {
   MAX_DISTANCE,
   minDistance,
   minDistanceOf,
-  SHIP_MIN_DISTANCE,
-  shipFramingDistance,
+  pathFramingDistance,
 } from './framing';
 
 const sys = createSandboxWorld().system;
@@ -47,19 +49,36 @@ describe('framing', () => {
   });
 });
 
-describe('ship framing', () => {
+describe('ship framing (S5b-12)', () => {
   const world = createSandboxWorld();
+  const earthR = getBody(sys, 'earth').radius;
 
-  it('frames a ship at 2.5 × its distance from its parent, capped at the parent framing', () => {
-    expect(shipFramingDistance(7000, 1e6)).toBe(17_500);
-    expect(shipFramingDistance(1e6, 1.2e6)).toBe(1.2e6);
-    expect(shipFramingDistance(0, 1e6)).toBe(SHIP_MIN_DISTANCE);
-    const kestrel = { kind: 'ship', id: 'ship-1' } as const;
-    expect(framingDistanceOf(world, kestrel, 0)).toBeCloseTo(
-      2.5 * (getBody(sys, 'earth').radius + 400),
-      6,
-    );
-    expect(minDistanceOf(world, kestrel, 0)).toBe(0.05);
+  it('shows the whole of a low Earth orbit, around the ship', () => {
+    // Kestrel: a 400 km circular orbit.
+    const d = pathFramingDistance(world, 'ship-1', 0);
+    const r = earthR + 400;
+    expect(fits(2 * r, d)).toBe(true);
+    expect(d).toBeGreaterThanOrEqual(3 * earthR);
+    expect(d).toBeLessThan(framingDistance(sys, 'earth'));
+    expect(framingDistanceOf(world, { kind: 'ship', id: 'ship-1' }, 0)).toBe(d);
+    expect(minDistanceOf(world, { kind: 'ship', id: 'ship-1' }, 0)).toBe(0.05);
+  });
+
+  it('frames a trans-lunar path out past the Moon, capped by Earth’s framing', () => {
+    const w = createSandboxWorld();
+    const r = spawnShip(w, {
+      designId: 'starship',
+      orbit: presetOrbit(w.system, 'leo-lunar-plane', 0),
+    });
+    if (!r.ok) throw new Error(r.error);
+    addNode(w, r.value, { t: SMOKE_TLI.dt, dv: { prograde: SMOKE_TLI.dv, normal: 0, radial: 0 } });
+    // Before the burn, the path ends at the node: it frames the low orbit.
+    const before = pathFramingDistance(w, r.value, 0);
+    expect(before).toBeLessThan(1e5);
+    // Just after it, the path runs out to the Moon's SOI.
+    const after = pathFramingDistance(w, r.value, SMOKE_TLI.dt + 1);
+    expect(after).toBeGreaterThan(apo('moon'));
+    expect(after).toBeLessThanOrEqual(framingDistance(sys, 'earth'));
   });
 
   it('frames bodies as before', () => {

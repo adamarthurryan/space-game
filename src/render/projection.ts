@@ -78,7 +78,7 @@ export function projectFrame(
 }
 
 /** Projects a point at `world − origin`, returning its screen position and distance. */
-function projectPoint(
+export function projectPoint(
   frame: MapFrame,
   wx: number,
   wy: number,

@@ -125,20 +125,30 @@ async function run(page, check) {
   await sleep(1600);
   await keys(page, 'KeyP');
   await sleep(1200);
-  await wheel(page, canvas, 2);
+  // The ship was on screen, so focusing it kept Earth's framing (S5b-5): zoom in to the low orbit.
+  await wheel(page, canvas, -6);
 
   // 2. The ghost on the path, and click to create.
   const path = await probe(page, 'activePath');
+  // The low orbit, seen from above, runs just outside Earth's disc.
+  const earth = await probe(page, 'body', 'earth');
+  const offEarth = (p) => Math.hypot(p.x - earth.x, p.y - earth.y) - earth.disc;
   const pts = path[0].points.filter(
     (p) =>
       Number.isFinite(p.x) &&
       p.x > 40 &&
       p.y > 40 &&
       p.x < canvas.width - 40 &&
-      p.y < canvas.height - 40,
+      p.y < canvas.height - 40 &&
+      offEarth(p) > 0,
   );
   const pt = pts[Math.floor(pts.length / 4)];
-  await page.mouse.move(canvas.x + pt.x + 2, canvas.y + pt.y + 2);
+  // 2 px off the path, away from Earth's disc.
+  const away = Math.hypot(pt.x - earth.x, pt.y - earth.y);
+  await page.mouse.move(
+    canvas.x + pt.x + (2 * (pt.x - earth.x)) / away,
+    canvas.y + pt.y + (2 * (pt.y - earth.y)) / away,
+  );
   await sleep(150);
   const ghost = await probe(page, 'ghost');
   check(

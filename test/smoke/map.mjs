@@ -143,7 +143,9 @@ async function run(page, check) {
     `2. clicking Jupiter selects it (inspector: ${heading}, SOI ${soi})`,
   );
 
-  // 3. Double-clicking Jupiter frames its moons.
+  // 3. Double-clicking Jupiter frames its moons. Zoom in on the Sun first, so that Jupiter is off
+  // screen: focusing an object on screen keeps the distance (S5b-5).
+  await wheel(page, -20);
   const t0 = Date.now();
   const refocused = await focusFromTree(page, 'Jupiter', 'jupiter');
   const took = (Date.now() - t0) / 1000;

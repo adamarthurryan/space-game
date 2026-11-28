@@ -11,6 +11,7 @@ import type { World } from '../sim/world';
 import { resolveActiveShip, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { CameraStage } from './camera/CameraStage';
+import { FOV_DEG } from './camera/framing';
 import { registerDebug } from './debugHandle';
 import { attachCameraInput } from './input/cameraInput';
 import { attachPointerInput } from './input/pointerInput';
@@ -38,7 +39,6 @@ import {
 /** Fixed clip planes, km, with a logarithmic depth buffer (S2-5). */
 const NEAR = 1e-3;
 const FAR = 1e12;
-const FOV_DEG = 50;
 const BACKGROUND = '#05060a';
 /** The drawing buffer's pixel ratio is capped, as R3F's default was. */
 const MAX_PIXEL_RATIO = 2;
