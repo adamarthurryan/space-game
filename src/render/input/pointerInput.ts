@@ -1,7 +1,7 @@
 import { useView, type MapObjectRef } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { DRAG_THRESHOLD_PX } from '../camera/controller';
-import { frameBodyOf, type MapFrame } from '../mapFrame';
+import { resolveFrameBody, type MapFrame } from '../mapFrame';
 import type { NodeGizmo } from '../NodeGizmo';
 import { nearestOnPath } from '../pathPicking';
 import { pick } from '../picking';
@@ -70,9 +70,8 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
       if (claim.kind === 'node' && !claim.moved) {
         if (Math.hypot(p.x - claim.x, p.y - claim.y) < DRAG_THRESHOLD_PX) return;
         claim.moved = true;
-        const view = useView.getState();
-        view.select(claim.ref);
-        const fb = frameBodyOf(useWorld.getState().world, view.focus, frame.t);
+        useView.getState().select(claim.ref);
+        const fb = resolveFrameBody(useWorld.getState().world, useView.getState().frame, frame.t);
         if (!gizmo.beginTimeDrag(claim.ref.shipId, claim.ref.id, fb, frame.t)) return;
       }
       gizmo.dragTo(p.x, p.y, frame, e);

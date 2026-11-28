@@ -107,12 +107,13 @@ async function run(page, check) {
   await keys(page, 'Space'); // pause: planning happens at a fixed time
   await page.getByRole('tab', { name: 'Fleets' }).click();
 
-  // 1. Spawn LEO (lunar plane): it becomes the active ship.
+  // 1. Spawn LEO (lunar plane), and fly it (A, S5b-6): it becomes the active ship.
   await page.getByRole('button', { name: 'Spawn ship…' }).click();
   await page.getByLabel('Preset').selectOption('leo-lunar-plane');
   await page.getByRole('button', { name: 'Spawn', exact: true }).click();
   const sel = await page.evaluate(() => window.__spaceGame.view.getState().selected);
   const id = sel?.id;
+  await keys(page, 'KeyA');
   const spawnT = (await segments(page, id))[0].tStart;
   check((await probe(page, 'activeShip')) === id, `1. the spawned ship ${id} is active`);
   const star = await page.getByRole('option', { name: /Starship 4/ }).textContent();

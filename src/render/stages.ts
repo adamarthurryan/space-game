@@ -44,7 +44,7 @@ export interface ViewSnapshot {
   focus: FocusRef;
   selected: MapObjectRef | null;
   hovered: MapObjectRef | null;
-  /** The body whose frame trajectories are drawn in (S3-16). */
+  /** The body trajectories are drawn relative to: the resolved reference frame (S5b-1). */
   frameBodyId: BodyId;
   /** The active ship, if it is coasting (S4-9). */
   activeShipId: ShipId | null;

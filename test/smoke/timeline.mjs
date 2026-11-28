@@ -58,6 +58,7 @@ async function lunarShip(page) {
   await page.getByRole('button', { name: 'Spawn ship…' }).click();
   await page.getByLabel('Preset').selectOption('leo-lunar-plane');
   await page.getByRole('button', { name: 'Spawn', exact: true }).click();
+  await keys(page, 'KeyA'); // fly it (S5b-6)
   const id = await probe(page, 'activeShip');
   const nodeId = await store(
     page,

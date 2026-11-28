@@ -10,7 +10,7 @@ import { bodyOrder, bodyWorldPositionsInto, type BodyId, type BodySystem } from 
 import type { ShipId } from '../sim/ship';
 import { shipBodyAt, shipPointAt, type World } from '../sim/world';
 import type { NodeId } from '../sim/maneuver';
-import type { FocusRef } from '../store/useView';
+import type { FocusRef, FrameRef } from '../store/useView';
 import type { ProjectedPolyline } from './pathPicking';
 
 /** The camera of this frame, relative to the origin: position and orthonormal basis. */
@@ -247,9 +247,19 @@ export function mapObjectWorldInto(frame: MapFrame, world: World, ref: FocusRef,
 }
 
 /**
- * The body trajectories are drawn relative to: the focus, or a focused ship's parent at t
- * (S3-16, S5-10). A ship not drawn at t gives the body it hit, or its current parent.
+ * The body a focus is framed around (the camera's rule): the focus, or a focused ship's parent at
+ * t (S3-16, S5-10). A ship not drawn at t gives the body it hit, or its current parent.
  */
 export function frameBodyOf(world: World, focus: FocusRef, t: number): BodyId {
   return focus.kind === 'body' ? focus.id : shipBodyAt(world, focus.id, t);
+}
+
+/**
+ * The body trajectories are drawn relative to at time t (S5b-1, S5b-3): a fixed body, or a
+ * followed ship's parent at t. A followed ship that was destroyed resolves to the body it hit
+ * (shipBodyAt).
+ */
+export function resolveFrameBody(world: World, frame: FrameRef, t: number): BodyId {
+  if (frame.kind === 'ship-parent') return shipBodyAt(world, frame.shipId, t);
+  return world.system.bodies[frame.id] ? frame.id : world.system.rootId;
 }

@@ -12,7 +12,13 @@ import { bodyWorldState } from '../sim/body';
 import { trajectoryStateAt } from '../sim/trajectory';
 import { upcomingEvents } from '../sim/upcoming';
 import type { World } from '../sim/world';
-import { frameBodyOf, createMapFrame, frameWorldInto, mapObjectWorldInto } from './mapFrame';
+import {
+  frameBodyOf,
+  createMapFrame,
+  frameWorldInto,
+  mapObjectWorldInto,
+  resolveFrameBody,
+} from './mapFrame';
 import { previewCaughtUp, viewTime } from './previewTime';
 import { bodiesStage, shipsStage } from './stages';
 import { conicGeometry, elapsedWindow, segmentIndexAt } from './trajectoryGeometry';
@@ -98,6 +104,26 @@ describe('the map at a preview time (S5-10)', () => {
     bodiesStage(f, w, w.clock.t);
     shipsStage(f, w);
     expect(f.ships.ids).toContain(id);
+  });
+});
+
+describe('resolveFrameBody (S5b-1, S5b-3)', () => {
+  it('follows the ship across its Moon SOI entry, at now and at a preview time, and after impact', () => {
+    const { w, id } = lunarWorld();
+    const follow = { kind: 'ship-parent', shipId: id } as const;
+    const entry = upcomingEvents(w, id).events.find((e) => e.kind === 'soi-enter')!;
+    expect(resolveFrameBody(w, follow, w.clock.t)).toBe('earth');
+    expect(resolveFrameBody(w, follow, entry.t - 60)).toBe('earth');
+    expect(resolveFrameBody(w, follow, entry.t + 60)).toBe('moon');
+    const end = w.derived.trajectories[id]!.segments.at(-1)!;
+    if (end.endEvent === 'impact') {
+      expect(resolveFrameBody(w, follow, end.tEnd + 10)).toBe(end.endTargetId);
+    }
+  });
+
+  it('is a fixed body itself, whatever the time', () => {
+    const { w } = lunarWorld();
+    expect(resolveFrameBody(w, { kind: 'body', id: 'mars' }, 1e9)).toBe('mars');
   });
 });
 

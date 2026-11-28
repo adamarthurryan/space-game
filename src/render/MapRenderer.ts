@@ -19,7 +19,7 @@ import { MarkerLayer } from './layers/MarkerLayer';
 import { NodeGizmo } from './NodeGizmo';
 import { OrbitLayer } from './layers/OrbitLayer';
 import { TrajectoryLayer } from './layers/TrajectoryLayer';
-import { frameBodyOf, type MapFrame } from './mapFrame';
+import { resolveFrameBody, type MapFrame } from './mapFrame';
 import { previewCaughtUp, viewTime } from './previewTime';
 import type { LabelRegistry } from './overlays/labelLayout';
 import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
@@ -160,12 +160,12 @@ export class MapRenderer {
 
   /** The view for this frame, at the time the map is drawn at (S5-10). */
   private readView(world: World): ViewSnapshot {
-    const { focus, selected, hovered, activeShipId, preview } = useView.getState();
+    const { focus, frame, selected, hovered, activeShipId, preview } = useView.getState();
     return {
       focus,
       selected,
       hovered,
-      frameBodyId: frameBodyOf(world, focus, viewTime(world.clock.t, preview)),
+      frameBodyId: resolveFrameBody(world, frame, viewTime(world.clock.t, preview)),
       activeShipId: resolveActiveShip(world, activeShipId),
       previewing: preview !== null,
     };

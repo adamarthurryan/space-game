@@ -72,10 +72,12 @@ describe('FleetList', () => {
   });
 });
 
-describe('FleetList: the active ship (S4-9)', () => {
-  it('marks the last selected ship with ★, and keeps it when a body is selected', () => {
+describe('FleetList: the active ship (S5b-6)', () => {
+  it('marks the activated ship with ★, not the selected one, and keeps it when a body is selected', () => {
     render(<FleetList />);
     fireEvent.click(screen.getByRole('option', { name: /Tern/ }));
+    expect(screen.getByRole('option', { name: /Tern/ }).textContent).not.toContain('★');
+    act(() => useView.getState().activate('ship-2'));
     expect(screen.getByRole('option', { name: /Tern/ }).textContent).toContain('★');
     act(() => useView.getState().select({ kind: 'body', id: 'moon' }));
     expect(screen.getByRole('option', { name: /Tern/ }).textContent).toContain('★');
