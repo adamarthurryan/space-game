@@ -100,12 +100,26 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 
 **Done when:** at ×10⁶ warp, the clock stops exactly at a node instead of passing it, and scrubbing to the arrival time shows the ship and the Moon in their arrival positions without changing the sim.
 
+## Sprint 5b — Interface and usability review
+
+**Goal:** review the interface built so far and fix what hides or misreports things, before sprints 6 to 9 add more on top.
+
+- The pointer model: selection, focus, reference frame and active ship become separate. Ships are activated only with A or the map toolbar's Fly button. Frame ▾ sits in the map toolbar. Focusing an on-screen object moves only the centre. A ship's target is defined for sprint 7.
+- Orientation: a top-down Earth–Moon start view, spawned ships flash, and ships are framed to their path.
+- Map legibility: overlays behind bodies dimmed, the gizmo hidden at small scale, ship labels merged with their parent's, and the body entered drawn at the SOI-entry time.
+- Plan editing: the node editor inline in the ship inspector, plan Δv in m/s, full-width fields, no Pe/Ap on circular orbits, standard popovers.
+- The strip on a fixed 10-year scale, shaded past the prediction. Placeholder chrome hidden until its features exist.
+
+- **Detailed plan:** [sprint-5b.md](sprint-5b.md) (findings F1 to F23, decisions S5b-1 to S5b-24).
+
+**Done when:** from the first view, a player can find a ship, fly it, plan a trans-lunar burn while seeing the plan's Δv left, and see the Moon where the ship meets it, without selecting anything changing the active ship. The strip's ticks don't move when the plan or the clock changes.
+
 ## Sprint 6 — Fleets, the active ship and alarms
 
 **Goal:** manage several ships, and let alarms run the clock.
 
 - `sim/fleet.ts` and the Fleets tab: create, rename and delete fleets, drag ships between them, "Unassigned". Ship rows with SOI, next-event countdown, remaining Δv, and status icons (alarm set, low propellant, impact predicted). Status filters: idle, docked, in trouble.
-- The active ship: select by list, map click or keyboard (next/previous, next in fleet, next idle). Only the active ship's nodes are editable; other plans are drawn as markers that make their ship active when clicked. The full ship inspector for milestone 1 (modules, mass, propellant, Δv, engines, current orbit, fleet, node list, alarms).
+- The active ship: activated with A or Fly (sprint 5b), plus keyboard cycling (next/previous, next in fleet, next idle). Only the active ship's plan is editable; other plans are drawn as markers, and clicking one selects it, read-only (S5b-8). The full ship inspector for milestone 1 (modules, mass, propellant, Δv, engines, current orbit, fleet, node list, alarms).
 - The timeline "Show" selector: active ship, selected ships or a fleet.
 - `sim/alarms.ts`: the `Alarm` model, with plan-item, event-type (optional target, optional once) and time triggers; fleet scope resolved at evaluation time, lead times, pause or drop warp. Set from a timeline event, a trajectory marker, or a ship or fleet context menu. Notifications with "Go to". The alarm list popover. The default impact alarm.
 - The Filters panel: map layers (orbits, trajectories all/active/fleet/none, nodes, labels, SOI spheres) and category toggles, plus search.
