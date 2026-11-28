@@ -17,6 +17,7 @@ export function FlyButton() {
       <button
         type="button"
         className={`${styles['button']} ${styles['fly']}`}
+        data-fly="fly"
         aria-label={`Fly ${st.name} (A)`}
         title={`Fly ${st.name}: plan and warp with it (A)`}
         onClick={() => activate(st.shipId)}
@@ -31,6 +32,7 @@ export function FlyButton() {
     <button
       type="button"
       className={`${styles['button']} ${styles['flown']}`}
+      data-fly={st.kind}
       aria-label={name}
       aria-pressed={st.kind === 'active'}
       disabled={st.kind === 'idle'}

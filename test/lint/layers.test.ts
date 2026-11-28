@@ -251,6 +251,32 @@ const cases: Case[] = [
     target: '../store/useWorld',
     expected: [],
   },
+  // Sprint 5b: the apsides predicate is shared below the UI; the reference frame and the active
+  // ship are view state, which must not reach game/ (S5b-1 to S5b-9, S5b-18, S5b-20).
+  {
+    file: 'src/render/ok.ts',
+    code: "import { hasApsides } from '../orbital/passages';\nexport const x = hasApsides;\n",
+    target: '../orbital/passages',
+    expected: [],
+  },
+  {
+    file: 'src/game/ok.ts',
+    code: "import { hasApsides } from '../orbital/passages';\nexport const x = hasApsides;\n",
+    target: '../orbital/passages',
+    expected: [],
+  },
+  {
+    file: 'src/render/bad.ts',
+    code: "import { formatDv } from '../ui/format';\nexport const x = formatDv;\n",
+    target: '../ui/format',
+    expected: [LAYER],
+  },
+  {
+    file: 'src/game/bad.ts',
+    code: "import { useView } from '../store/useView';\nexport const x = useView;\n",
+    target: '../store/useView',
+    expected: [LAYER],
+  },
   {
     file: 'src/misc/bad.ts',
     code: 'export const x = 1;\n',

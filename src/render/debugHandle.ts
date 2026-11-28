@@ -106,6 +106,18 @@ function createProbes() {
         return { ...g, world: { ...g.world }, x: sp.x, y: sp.y, text: marker?.text ?? null };
       });
     },
+    /** The Fly button's label and state: fly, active or idle (S5b-7). */
+    fly() {
+      const b = document.querySelector<HTMLButtonElement>('[data-fly]');
+      return b
+        ? {
+            label: b.getAttribute('aria-label'),
+            state: b.dataset['fly'],
+            pressed: b.getAttribute('aria-pressed') === 'true',
+            disabled: b.disabled,
+          }
+        : null;
+    },
     /** The object flashing, and the wall ms left, or null (S5b-11). */
     flash() {
       const f = useView.getState().flash;

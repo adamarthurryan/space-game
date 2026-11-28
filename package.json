@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "smoke": "node test/smoke/shell.mjs && node test/smoke/map.mjs && node test/smoke/ships.mjs && node test/smoke/maneuvers.mjs && node test/smoke/timeline.mjs"
+    "smoke": "node test/smoke/shell.mjs && node test/smoke/map.mjs && node test/smoke/ships.mjs && node test/smoke/maneuvers.mjs && node test/smoke/timeline.mjs && node test/smoke/usability.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
