@@ -111,6 +111,7 @@ This breaks [milestone 1](milestones.md#1-orbital-sandbox) into sprints. Each sp
 - The strip on a fixed 10-year scale, shaded past the prediction. Placeholder chrome hidden until its features exist.
 
 - **Detailed plan:** [sprint-5b.md](sprint-5b.md) (findings F1 to F23, decisions S5b-1 to S5b-24).
+- **Outcome:** done; see the implementation notes in [sprint-5b.md](sprint-5b.md#implementation-notes) and decisions 153–180. Three questions stay open (decisions.md open questions 10 to 12).
 
 **Done when:** from the first view, a player can find a ship, fly it, plan a trans-lunar burn while seeing the plan's Δv left, and see the Moon where the ship meets it, without selecting anything changing the active ship. The strip's ticks don't move when the plan or the clock changes.
 

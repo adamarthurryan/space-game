@@ -69,8 +69,12 @@ Actions return an `ActionResult` (`{ ok: true, value }` or `{ ok: false, error }
 This store holds view state that is not saved:
 
 - `selected` and `hovered` are `MapObjectRef`s: `{kind:'body'|'ship', id}` or `{kind:'node', shipId, id}`. The selection drives the inspector and the highlights.
-- `focus` is a `FocusRef` (a body or a ship) and drives the camera. `focusOn(ref)` focuses and selects in one call. A node focuses its ship (`focusRefOf`).
-- `activeShipId` is the ship whose plan can be edited: the last ship selected, directly or through one of its nodes. Read it through `resolveActiveShip(world, id)`, which drops destroyed or missing ships.
+- **Four pointers, one job each** (sprint 5b):
+  - `selected` drives the inspector and the list highlights;
+  - `focus` is a `FocusRef` (a body or a ship) and drives only the camera's centre. `focusOn(ref)` focuses and selects in one call. A node focuses its ship (`focusRefOf`);
+  - `frame` is the **reference frame**, `{ kind: 'body', id } | { kind: 'ship-parent', shipId }`: the body trajectories are drawn relative to. `select` sets it (a body: itself; the active ship or its node: follow it; another ship: its parent at the view time, fixed), `activate` makes it follow, and `setFrame(id)` (Frame ▾) fixes it. `render/mapFrame.ts`'s `resolveFrameBody(world, frame, t)` turns it into a body;
+  - `activeShipId` is the ship flown: map editing, the strip, warp-to. **Only `activate(id)` sets it** (A, or the Fly button), never `select`. Read it through `resolveActiveShip(world, id)`, which drops destroyed or missing ships. `shipOf(ref)` gives the ship of a ship or node ref.
+- `flash` is `{ ref, until } | null` (`flashObject(ref)`, 2 s of wall time): a new ship pulses and its label is forced to show. `MapRenderer` turns it into `ViewSnapshot.flash` with the elapsed seconds.
 - **Requests as counters.** `focusSeq` and `snapRequest.seq` exist so that a repeated request (refocusing the same body, snapping again) still triggers. `CameraStage` subscribes and reacts when a seq changes. The camera's animated state is *not* in the store. It lives in the camera controller.
 - Panel state: `leftPanelOpen`, `rightPanelOpen`, `leftTab`, `expanded` (the System tree), `spawnFormOpen`.
 - `preview` is `{ t, sticky } | null` (sprint 5): the map is drawn at `preview.t` instead of now. `startPreview`, `movePreview` (keeps `sticky`) and `endPreview` change it. It is view state only: nothing below `store/` ever sees it. `render/previewTime.ts` has `viewTime(clockT, preview)`, the time the map is drawn at.
@@ -155,12 +159,13 @@ Lines (orbits, trajectories) follow the same rule: a sample relative to a parent
 ### 3.5 The camera (`camera/`)
 
 - **`controller.ts`**: pure TypeScript, with no three.js. A `CameraController` orbits the origin at `yaw` and `pitch` about a reference `pole`, at `logDistance` (log10 km). Its functions are `createController`, `zoomBy` (×2 per wheel notch, eased), `orbitBy`, `beginRefocus` (an eased 0.8 s move of origin and distance), `beginSnap` (look straight down a pole), `stepController(c, dtWall)`, `controllerOriginInto` (the origin, blended between the old and new focus during a refocus) and `controllerPose` (offset, forward and up, built from the pole basis so that pitch ±90° is not degenerate). The input helpers `wheelNotches` and `DRAG_THRESHOLD_PX` (4 px separates a click from a drag) are here too.
-- **`framing.ts`**: how far a refocus moves to. `framingDistance` is 3 × the apoapsis of the outermost major moon, or 8 × the body's radius if it has none; for the root it is 2 × the largest planet's apoapsis. `minDistance` is 1.05 × the radius. For ships, `framingDistanceOf` and `minDistanceOf` frame a ship at 2.5 × its distance from its parent.
-- **`CameraStage.ts`**: the three.js side. It subscribes to `useView` for `focusSeq` and `snapRequest`, steps the controller each frame, writes `frame.origin`, applies the pose to the three.js camera through a basis matrix (not `lookAt`), and fills `frame.camera` with `setFrameCamera`. `orbitPoleOf(world, ref)` gives the pole for the "Orbit plane" snap.
+- **`framing.ts`**: how far a refocus moves to. `framingDistance` is 3 × the apoapsis of the outermost major moon, or 8 × the body's radius if it has none; for the root it is 2 × the largest planet's apoapsis. `minDistance` is 1.05 × the radius. For ships, `pathFramingDistance` fits the ship's drawn path (to its segment's end or one revolution) around the ship, at least 3 × the parent's radius and at most the parent's framing. `FOV_DEG` (50°) lives here.
+- **`CameraStage.ts`**: the three.js side. It subscribes to `useView` for `focusSeq` and `snapRequest`, steps the controller each frame, writes `frame.origin`, applies the pose to the three.js camera through a basis matrix (not `lookAt`), and fills `frame.camera` with `setFrameCamera`. A new focus that is `onScreen` in the last frame keeps the distance, yaw, pitch and pole (only the centre moves); one off screen gets its framing distance. It starts looking straight down the ecliptic (`START_PITCH`). `orbitPoleOf(world, ref)` gives the pole for the "Orbit plane" snap.
 
 ### 3.6 Projection and picking
 
-- **`projection.ts`**: `projectFrame(frame, system, view)` does the screen math on the CPU, in float64, from `frame.camera`. For each body it computes the screen position, the depth, and the disc radius in px (angular radius over half the field of view). Thresholds: under 0.5 px the sphere is hidden; under 3 px a fixed-size marker is drawn; a body within 6 px of its parent's centre is `merged` and gets no marker or label. Ships merge the same way unless they are focused or selected. Other code uses this result rather than projecting again.
+- **`projection.ts`**: `projectFrame(frame, system, view)` does the screen math on the CPU, in float64, from `frame.camera`. For each body it computes the screen position, the depth, and the disc radius in px (angular radius over half the field of view). Thresholds: under 0.5 px the sphere is hidden; under 3 px a fixed-size marker is drawn; a body within 6 px of its parent's centre is `merged` and gets no marker or label. Ships merge the same way unless they are focused, selected or flashing. Other code uses this result rather than projecting again.
+- **`occlusion.ts`**: `occludedAt(frame, x, y, depth)` and `sceneOccluded(frame, sx, sy, sz)`: whether a point is behind a nearer drawn disc. Labels, ship picking, trajectory markers, node glyphs and gizmo handles all use it.
 - **`picking.ts`**: `pick(frame, x, y)` does screen-space picking over `MapFrame`, with no raycasting. Priority: node glyph > ship marker (unless behind a nearer disc) > the nearest disc under the cursor > label > the nearest body marker within 8 px.
 - **`pathPicking.ts`**: `nearestOnPath(paths, x, y)` finds the nearest point on the active ship's projected trajectory, interpolating its time. `TrajectoryLayer` fills `frame.paths` each frame, and the ghost node and node time drags use it.
 - **`screenDash.ts`**: `projectScenePoint` and `projectVerticesInto` project origin-relative scene points, and `screenLineDistances` gives the cumulative screen length used for dashes.
@@ -189,7 +194,8 @@ The rules are:
 | `OrbitLayer` | One `Line` per orbiting body, resampled from its mean elements at `t` every frame (256 segments) and starting at the body. Alpha = base × screen-size fade × per-vertex distance fade; brighter when focused, selected or hovered | `orbitFade.ts`, `orbitLineObject.ts` |
 | `TrajectoryLayer` | Each ship's trajectory segments. Each segment has three pieces: `main`; `last`, the faded final revolution before the segment's end; and `rest`, the rest of the current orbit after a node, for the active ship only. The pieces are drawn relative to `view.frameBodyId`, and the planned path after the first node is dashed | `trajectoryGeometry.ts`, `trajectoryMaterial.ts`, `screenDash.ts` |
 | `MarkerLayer` | One `THREE.Points` for body markers and one for ship triangles, with sizes in device px (0 = hidden) | `markerMaterial.ts`, `shipStyle.ts` |
-| `NodeGizmo` | Six Δv handles on the active ship's selected node, kept 60 px long on screen and drawn on top | `nodeGizmoMath.ts`, `nodeMarkers.ts` |
+| `EncounterGhostLayer` | For each SOI entry on the selected, hovered, focused or active ship's path, a camera-facing ring of the entered body's SOI radius where the body will be at the entry; fills `frame.encounters` for the marker overlay | `encounterGhosts.ts` |
+| `NodeGizmo` | Six Δv handles on the active ship's selected node, kept 60 px long on screen and drawn on top; hidden while the node's conic is under 150 px across (`conicScreenSize`), and handles behind a disc are dimmed and not hittable | `nodeGizmoMath.ts`, `nodeMarkers.ts` |
 
 **`trajectoryGeometry.ts`** is the core of the trajectory drawing:
 
@@ -209,33 +215,34 @@ The rules are:
 Both input modules attach DOM listeners to the canvas and return a detach function.
 
 - **`cameraInput.ts`**: the wheel zooms (non-passive, so it can `preventDefault`), and a left-button drag of 4 px or more orbits the camera, with pointer capture.
-- **`pointerInput.ts`**: hover sets `useView.hovered` and the cursor (`pointer`, `copy` over the ghost, `grab` over a handle). A click selects. A double-click calls `focusOn`. Over empty space, the active ship's path shows a **ghost node** (`frame.ghost`), and clicking there calls `addNode` and selects the new node. Presses on a gizmo handle, or on one of the active ship's nodes, are **claimed**: `stopImmediatePropagation()` keeps the camera listener (attached second) from seeing them. A claimed node press that doesn't move selects the node; one that moves becomes a time drag. Escape, F, Delete and the other map keys are in `ui/useMapKeys.ts`, not here.
+- **`pointerInput.ts`**: hover sets `useView.hovered` and the cursor (`pointer`, `copy` over the ghost, `grab` over a handle). A click selects. A double-click calls `focusOn`. Over empty space, the active ship's path shows a **ghost node** (`frame.ghost`), and clicking there calls `addNode` and selects the new node. Presses on a gizmo handle, or on one of the active ship's nodes, are **claimed**: `stopImmediatePropagation()` keeps the camera listener (attached second) from seeing them. A claimed node press that doesn't move selects the node; one that moves becomes a time drag. Only the active ship's nodes can be claimed, and not when they are behind a disc or their gizmo is hidden at small scale; clicking another ship's node just selects it. Escape, F, Delete and the other map keys are in `ui/useMapKeys.ts`, not here.
 
 ### 3.9 DOM overlays (`overlays/`)
 
 Labels and trajectory markers are DOM, not WebGL, for crisp text and easy styling. **React creates the spans; the labels stage positions them every frame by writing to the DOM directly**, through a registry, with no React re-render.
 
 - **`LabelOverlay.tsx`** renders one span per body and per coasting ship, and registers them in the `LabelRegistry` (`spans[i]`, `shipSpans`). It re-renders on `version` to pick up new ships.
-- **`labelLayout.ts`**: `measureLabels` (reads each span's size once, the first time it is laid out), `updateLabelCandidates` and `updateShipLabelCandidates` (anchors from the projection; hidden when merged, off screen or occluded), and `placeLabels`, which runs `declutter` and writes `transform` and visibility to the spans. It also stores `frame.labels` for picking.
+- **`labelLayout.ts`**: `measureLabels` (reads each span's size once, the first time it is laid out), `updateLabelCandidates` and `updateShipLabelCandidates` (anchors from the projection; hidden when merged, off screen or occluded), and `placeLabels`, which first merges ship labels into their parent's (`mergeGroups`: a ship label overlapping its parent's, or a flashing ship), then runs `declutter` and writes `transform` and visibility to the spans. A merged label is the parent's span followed by the ship spans (separators are CSS `::before`) and a pooled "+N" span; `frame.labels` gets one entry per name, for picking, the first with `parts`.
 - **`declutter.ts`**: greedy placement by priority. The order is focus > selection > hover > star > planet > dwarf planet > ship > moon, then by radius. The focus and the selection are always placed.
-- **`TrajectoryMarkerOverlay.tsx`** and **`trajectoryMarkerLayout.ts`** manage a pool of spans for SOI enter and exit, impact, Pe and Ap (`trajectoryMarkers.ts`), node glyphs (`nodeMarkers.ts`) and the ghost. Glyphs are always shown. Texts are placed after the labels and hidden where they would overlap one. `frame.nodes` is filled here for picking.
+- **`TrajectoryMarkerOverlay.tsx`** and **`trajectoryMarkerLayout.ts`** manage a pool of spans for the encounter ghosts' ○ "Moon at entry", SOI enter and exit, impact, Pe and Ap (`trajectoryMarkers.ts`, only where `hasApsides`), node glyphs (`nodeMarkers.ts`) and the ghost node. Glyphs are always shown, dimmed with no text behind a disc. Texts are placed after the labels and hidden where they would overlap one. `frame.nodes` is filled here for picking, with `occluded`.
 
 ### 3.10 Debug handle (`debugHandle.ts`)
 
-In dev builds, `window.__spaceGame` exposes read-only probes: `camera()`, `body(id)`, `labels()`, `ship(id)` and `ships()`, `trajectory(id)` and `trajectoryVertices(id)`, `plan(id)`, `nodeScreen(nodeId)`, `ghost()`, `activePath()`, `gizmo()`, `trajectoryMarkers()`, `simTime()`, and from sprint 5 `timeline()`, `preview()`, `clock()`, `shipWorld(id)`, `shipPredicted(id, t)`, `bodyWorld(id)` and `elapsedVertices(id)`, and the two stores (`view`, `world`). `MapRenderer` registers its sources with `registerDebug(key, value)`. In production, `import.meta.env.DEV` is false and the probes are removed as dead code. The smoke tests in `test/smoke/*.mjs` drive the app through this handle. When you add something visible, add a probe for it and a smoke check.
+In dev builds, `window.__spaceGame` exposes read-only probes: `camera()`, `body(id)`, `labels()`, `ship(id)` and `ships()`, `trajectory(id)` and `trajectoryVertices(id)`, `plan(id)`, `nodeScreen(nodeId)`, `ghost()`, `activePath()`, `gizmo()`, `trajectoryMarkers()`, `simTime()`, from sprint 5 `timeline()`, `preview()`, `clock()`, `shipWorld(id)`, `shipPredicted(id, t)`, `bodyWorld(id)` and `elapsedVertices(id)`, from sprint 5b `frame()`, `flash()`, `fly()` and `encounterGhosts()`, and the two stores (`view`, `world`). `MapRenderer` registers its sources with `registerDebug(key, value)`. In production, `import.meta.env.DEV` is false and the probes are removed as dead code. The smoke tests in `test/smoke/*.mjs` drive the app through this handle. When you add something visible, add a probe for it and a smoke check.
 
 ## 4. The UI layer (`src/ui/`)
 
 ### 4.1 Layout (`ui/layout/`)
 
 - **`AppShell`** is a CSS grid: `TopBar`, `LeftSidebar`, `MapView`, `Inspector` and `Timeline`. A closed side panel is not rendered at all, and the `data-left` and `data-right` attributes shrink its column to 0.
-- **`LeftSidebar`** has ARIA tabs (System, Fleets, Stations, Routes), with arrow-key navigation and a placeholder for filters. System shows `SystemTree`, Fleets shows `FleetList`, and the other tabs show empty text.
-- **`MapView`** mounts `<Scene>` with the formatters, the `MapToolbar` (Ecliptic, Orbit plane and Focus buttons), the `PreviewBadge` (the amber border and the "PREVIEW" badge with a Now button, shown during a preview) and `useMapKeys()`. Esc ends a preview before it clears the selection.
-- **`Inspector`** switches on `selected.kind`: `ShipInspector`, `NodeEditor`, or `BodyInspector`, which also shows "Nothing selected".
+- **`LeftSidebar`** has ARIA tabs (System, Fleets), with arrow-key navigation. Stations, Routes and Filters are hidden until built.
+- **`MapView`** mounts `<Scene>` with the formatters, the `MapToolbar` (Ecliptic, Orbit plane and Focus buttons, then `FrameMenu`, "Frame: Earth ▾", and `FlyButton`, "Fly Kestrel (A)" or "★ Kestrel"; their pure parts are `ui/map/frameOptions.ts` and `flyState.ts`), the `PreviewBadge` (the amber border and the "PREVIEW" badge with a Now button, shown during a preview) and `useMapKeys()`. Esc ends a preview before it clears the selection.
+- **`Inspector`** switches on `selected.kind`: `ShipInspector` for a ship or a node (the node's ship), or `BodyInspector`, which also shows "Nothing selected".
+- **`Popover`** is the shared menu button: `<Popover label="Add node ▾">{(close) => …}</Popover>`. It closes on a press outside, on Esc (consumed in the window's capture phase, so the map keys don't see it), and when the content calls `close`; it opens on the side with room. Pause on ▾, Add node ▾ and Frame ▾ use it.
 - **`Timeline`** has play and pause, warp down and up, the warp readout, `PauseOnMenu`, the warp-to buttons, the event strip and the date. The sprint 5 pieces are in `ui/timeline/`:
   - `WarpToButtons`: ⏭ (warp to next event) and ◆⏭ (warp to node), and the ⏩ readout while a warp-to runs. A refused action's error becomes the button's title.
-  - `TimelineStrip`: the active ship's upcoming events (`sim/upcoming.ts`) as glyphs on a logarithmic axis from now (`scale.ts`), stacked by `stripLayout.ts`, with hover tooltips (`eventText.ts`). Pressing on the strip starts a transient preview that ends on release. Clicking a glyph starts a sticky preview at that event.
-- **`TopBar`** has the title, the panel toggles, and placeholder warning and alarm counts.
+  - `TimelineStrip`: the active ship's upcoming events (`sim/upcoming.ts`) as glyphs on a fixed 10-year logarithmic axis from now (`scale.ts`, knee 10 min, so the ticks never move), shaded past the prediction, stacked by `stripLayout.ts`, with hover tooltips (`eventText.ts`). Pressing on the strip starts a transient preview that ends on release. Clicking a glyph starts a sticky preview at that event.
+- **`TopBar`** has the title and the panel toggles.
 
 ### 4.2 Panels (`ui/panels/`)
 
@@ -245,16 +252,16 @@ In dev builds, `window.__spaceGame` exposes read-only probes: `camera()`, `body(
 | `FleetList` | Ships in spawn order with design, SOI and Δv; destroyed ships greyed out; "Spawn ship…" | `shipDetails.ts` |
 | `SpawnShipForm` | Design, parent and orbital elements, with presets | — (calls `spawnShip`) |
 | `BodyInspector` | Physical data, orbit and SOI at 10 Hz | `bodyDetails.ts` |
-| `ShipInspector` | Mass, propellant, engines, orbit and upcoming events; contains `PlanSection` | `shipDetails.ts` |
-| `PlanSection` | The node list, Δv totals, and "Add node ▾" (at Pe or Ap, or after a delay) | `planDetails.ts` |
-| `NodeEditor` | A node's time (absolute and relative), its Δv components, feedback (over budget, long burn, not reached, resulting orbit), and enable, snap and delete | `planDetails.ts` |
+| `ShipInspector` | Mass, propellant, engines, orbit and upcoming events; contains `PlanSection`, read-only unless the ship is active | `shipDetails.ts` |
+| `PlanSection` | The node list, Δv totals, and "Add node ▾" (at Pe or Ap, disabled with "Circular orbit" by `addApsisRefusal`, or after a delay). The selected node's row expands into `NodeEditor` | `planDetails.ts` |
+| `NodeEditor` | Inside the expanded row: a node's time (absolute and relative), its Δv components, feedback (over budget, long burn, not reached, resulting orbit), and enable, snap (disabled by `snapRefusal`) and delete; every control disabled when `readOnly` | `planDetails.ts` |
 
 ### 4.3 Shared helpers
 
-- **`format.ts`**: `formatDate`, `formatWarp`, `formatDistance`, `formatSpeed`, `formatDuration`, `formatAngle`, `formatScientific`, `formatMass` and `formatCountdown`. All UI text with units goes through these, and `render/` receives some of them as props.
+- **`format.ts`**: `formatDate`, `formatWarp`, `formatDistance`, `formatSpeed`, `formatDv` (every plan figure: `3,131.0 m/s`), `formatDuration`, `formatAngle`, `formatScientific`, `formatMass` and `formatCountdown`. All UI text with units goes through these, and `render/` receives some of them as props.
 - **`parse.ts`**: `parseSpeed`, `parseDuration` and `parseDate`, the inverses for typed input. They return `null` when the text can't be read.
-- **`fields/QuantityField.tsx`**: the editable value with units. It shows `format(value)`. Typing and then Enter or blur calls `parse`, then `onCommit`, which returns an error string or `null`. Escape reverts. The mouse wheel over a focused field nudges by a step (`nudge.ts`: Shift for fine, Alt for coarse); that listener is attached by hand because it must be non-passive. Errors appear under the field and the old value is kept.
-- **`useMapKeys.ts`**: the global shortcuts. Space pauses and plays, `,` and `.` change the warp, F focuses, E and P snap, Escape clears the selection, and Delete removes the selected node. Keys are ignored in text fields, Space is left to buttons, tabs and tree rows, and nothing fires when Ctrl, Alt or Meta is held.
+- **`fields/QuantityField.tsx`**: the editable value with units, its label above a full-width input. It shows `format(value)`. Typing and then Enter or blur calls `parse`, then `onCommit`, which returns an error string or `null`. Escape reverts. The mouse wheel over a focused field nudges by a step (`nudge.ts`: Shift for fine, Alt for coarse); that listener is attached by hand because it must be non-passive. Errors appear under the field and the old value is kept.
+- **`useMapKeys.ts`**: the global shortcuts. Space pauses and plays, `,` and `.` change the warp, F focuses, A flies the selected ship, E and P snap, Escape ends a preview or clears the selection (an open popover takes it first), and Delete removes the active ship's selected node. Keys are ignored in text fields, Space is left to buttons, tabs and tree rows, and nothing fires when Ctrl, Alt or Meta is held.
 - **`theme.css`**: CSS custom properties for colour, layout sizes and type. Components use CSS modules (`*.module.css`) and look up classes as `styles['name']`.
 
 ## 5. Common patterns
@@ -318,4 +325,5 @@ Always go through the store's action wrappers: `useWorld.getState().editNode(...
 
 - The `--color-map-bg` comment in `ui/theme.css` says to keep it in step with `render/Scene.tsx`, but the colour now lives in `MapRenderer.ts` (`BACKGROUND`).
 - `render/input/pointerInput.ts` defines its own `sameRef`, which duplicates the one exported from `store/useView.ts`.
+- The A key and the Fly button check that the ship is coasting in two places (`useMapKeys.ts` and `flyState.ts`) as well as in `activate`.
 - `architecture.md`'s source layout lists folders that don't exist yet: `ui/fleet/`, `ui/planner/` and others, a minor-body layer in `render/layers/`, and `store/jobs.ts`. They are planned, not missing.

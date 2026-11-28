@@ -70,13 +70,14 @@ The map is always 3D. There is no separate 2D planning view.
 
 **Camera**
 
-- Orbit-style controls around a **focus object** (body, ship or station). Double-click an object, or click it in a sidebar list, to focus it. The camera animates smoothly to the new focus.
+- Orbit-style controls around a **focus object** (body, ship or station). Double-click an object, double-click or Enter on a sidebar row, or F, to focus it. Focusing an object that is on screen moves only the centre, smoothly, keeping the zoom and the view direction; an object off screen is also framed (a ship by the extent of its path, so a low orbit is seen whole).
+- The app starts looking straight down on the Earth–Moon system, with nothing selected (a stopgap until scenarios choose their own start).
 - Logarithmic zoom covers the range from low orbit to the whole system in a few scroll steps.
 - **Plane snapping:** one keypress or button snaps the camera to look straight down on the plane of the ecliptic, or on the orbital plane of the selected body or ship. The view stays a 3D perspective camera, and orbiting the camera again leaves the snapped view.
 
 **Rendering of objects**
 
-- Bodies are drawn at true scale when close. When far away they appear as a fixed-size icon with a label. Labels are decluttered by priority (the focus and selection first, then larger bodies).
+- Bodies are drawn at true scale when close. When far away they appear as a fixed-size icon with a label. Labels are decluttered by priority (the focus and selection first, then larger bodies). A ship's label that would overlap its parent's merges into it: "Earth · Kestrel, Tern +2", each name clickable. A new ship flashes for two seconds, with its label shown.
 - **Minor bodies** (asteroids, comets) are drawn as instanced points, coloured by known composition when the resource layer is on. Their orbit lines are only drawn when they are selected, targeted, or part of an active route.
 - **Undetected bodies are not drawn.** Detected bodies whose orbits are not yet well known are drawn as a fuzzy band or arc along the uncertain part of the orbit, instead of a dot.
 - **Orbits** of bodies are thin lines, faded by distance from the focus. Moons' orbits are hidden at system zoom.
@@ -85,10 +86,11 @@ The map is always 3D. There is no separate 2D planning view.
   - dashed: the planned path after maneuver nodes,
   - **thick and glowing: thrust arcs** (the engine on), with small direction ticks showing the steering,
   - a marker at each SOI transition
+- Markers, nodes and the gizmo behind a body's disc are drawn faint, without text. The node gizmo is shown only when the node's orbit is at least 150 px across; zoom in to drag it.
 - **Stations** are drawn as icons, with a type glyph (habitat, refinery, depot, shipyard), on their fixed orbits or at their L-points.
-- **Reference frame:** trajectories are drawn relative to the **focus body**. A transfer to the Moon looks different in Earth-centred and Moon-centred frames. A frame selector in the inspector overrides this.
+- **Reference frame:** trajectories are drawn relative to a **reference frame body**, separate from the camera's focus. A transfer to the Moon looks different in Earth-centred and Moon-centred frames. Selecting a body sets the frame to it, and selecting a ship sets it to the ship's parent; for the active ship the frame **follows** it into each new SOI. **Frame ▾** in the map toolbar lists the focus body and its parents, and the selected body, and sets a fixed frame.
 - **Markers** on trajectories: periapsis/apoapsis (Pe/Ap), ascending/descending node, SOI enter/exit, closest approach to the target (with distance and relative speed), entering or leaving a radiation belt, and impact.
-- **Ghost positions:** when the timeline is scrubbed to a future time, every object is drawn at its position at that time. Optional "ghost" markers show where the target will be when the ship arrives.
+- **Ghost positions:** when the timeline is scrubbed to a future time, every object is drawn at its position at that time. At each SOI entry on the selected or active ship's path, the body entered is drawn where it will be then ("Moon at entry", with its SOI ring). Optional "ghost" markers show where the target will be when the ship arrives.
 
 **Map layers** (toggled in the Filters panel):
 
@@ -119,10 +121,10 @@ The player manages a fleet of ships but **controls one ship at a time**, the **a
   - its route, if it has one;
   - status icons: alarms set, low propellant, an impact predicted on its trajectory, a dose limit approaching, unsheltered crew during a storm warning.
 - Status filters: **idle**, on route, thrusting, docked, in trouble. These help the player find a ship in a long list.
-- Clicking a ship selects it and makes it the active ship. Double-clicking also focuses the camera on it. Ships can also be made active by clicking them on the map, or cycled with keyboard shortcuts (next/previous ship, next ship in fleet, next idle ship).
+- Clicking a ship, in the list or on the map, selects it; double-clicking also focuses the camera on it. Selecting never changes the active ship: **A**, or the map toolbar's **Fly** button, makes the selected ship active ("Fly Kestrel (A)", then "★ Kestrel"). The Fly button always shows the active ship. Cycling ships with keyboard shortcuts (next/previous ship, next ship in fleet, next idle ship) comes later. A new ship is selected, not flown.
 - Clicking a fleet header selects the whole fleet. That sets the timeline and trajectory filters to that fleet, but no ship becomes active.
 
-**Only the active ship's nodes and arcs are shown as editable.** Other ships' plans are drawn as small markers. Clicking one makes that ship active.
+**Only the active ship's nodes and arcs are shown as editable.** Other ships' plans are drawn as small markers. Clicking one selects it, and the inspector shows that ship's plan **read-only** ("fly this ship to edit (A)"). Whether the inspector should edit any ship is open (decisions.md, open question 10).
 
 ## Maneuver node and thrust arc editing
 
@@ -132,7 +134,7 @@ The core interaction should be quick, direct, and precise. It always applies to 
 
 - **Create:** hover over the active ship's trajectory. A ghost node (◇) follows the cursor along the path, showing the time from now and the altitude. Click to place it. Nodes can also be added from the inspector's **Plan** section ("Add node ▾"): "at next Pe", "at next Ap", "at next AN/DN" (against the parent's equator until targets exist), or "at time T". "Next" means after the plan's last node, so nodes chain: after a trans-lunar injection, "next Pe" is the lunar periapsis.
 - **Edit in 3D:** the selected node shows a gizmo with six handles (prograde/retrograde in yellow, normal/anti-normal in magenta, radial in/out in cyan). Dragging a handle changes that Δv component with **nonlinear sensitivity**: small drags give fine adjustments and large drags give coarse ones (10 px ≈ 0.1 m/s, 100 px = 100 m/s, 300 px ≈ 2.7 km/s). Shift switches to fine (×0.1) and Alt to coarse (×10). Handles that point at the camera are hidden. Dragging the node itself along the trajectory changes its time.
-- **Edit numerically:** the inspector shows the node's time (as a date, and as "T+" from now) and Δv components as editable fields. They accept scroll-wheel nudges (Δv 1 m/s, time 10 s; Shift finer, Alt coarser) and typed values, with units (`12 m/s`, `3.1 km/s`, `1d 2h 30m`). Delete removes the selected node.
+- **Edit numerically:** the inspector shows the node's time (as a date, and as "T+" from now) and Δv components as editable fields. They accept scroll-wheel nudges (Δv 1 m/s, time 10 s; Shift finer, Alt coarser) and typed values, with units (`12 m/s`, `3.1 km/s`, `1d 2h 30m`). Plan Δv is always shown in m/s (`3,131.0 m/s`). Delete removes the selected node. The editor opens inside the ship's Plan list, in the selected node's row, so the plan's totals stay in view. "At next Pe/Ap" and Snap to Pe/Ap are unavailable on a circular orbit, which has no Pe/Ap markers either.
 - **Finite execution:** a toggle executes the node as a real burn centred on the node time. When it is on, the actual path is drawn next to the impulsive prediction, so the player can see the difference.
 
 **Thrust arcs (low-thrust)**
@@ -242,7 +244,7 @@ The designer is free-form, with no hull classes and no 3D layout (see [features.
 
   Events are coloured per object. Alarms show as ⏰ markers. Hovering shows details; clicking jumps the _preview_ to that time.
 
-  The strip's time axis is **logarithmic**, from now at the left edge to the end of the active ship's prediction (between 1 day and 10 years), so a node in 20 minutes and an arrival in 200 days fit together. Close events stack, then fold into a "+n".
+  The strip's time axis is **logarithmic** and **fixed**: from now at the left edge to 10 years ahead, with its knee at 10 minutes, so a node in 20 minutes and an arrival in 200 days fit together and the ticks never move (1 h at 15%, 1 d at 38%, 1 yr at 83%). The time past the end of the active ship's prediction is shaded. Close events stack, then fold into a "+n".
 
 - Clicking an event in the timeline strip allows setting an alarm for that event.
 - **Preview scrubbing:** dragging on the strip looks at the future: the whole map is drawn at that time, with the route each ship flies until then drawn faded. It does not commit time, and the clock keeps running. A clear visual mode (a tinted border and a "PREVIEW" badge with a "Now" button) shows when the map is not at "now". Release to return. Clicking an event keeps the preview at that event until Esc, "Now", or the clock catching up. Map editing (the gizmo and placing nodes) is off during a preview. The inspector still shows now; showing it at the preview time comes with targets (milestone 1, sprint 7).
@@ -279,7 +281,7 @@ The content depends on the selection:
   - modules and facilities (each with its status and rates), stockpiles, crew and population;
   - power, shielding;
   - docked ships, build queue, alarms.
-- **Node / arc:** the editor, timing, and resulting orbit (see above).
+- **Node / arc:** the editor, timing, and resulting orbit (see above), inline in its ship's Plan list.
 
 ## Transfer planner
 
@@ -298,7 +300,7 @@ The porkchop planner is the most detailed of the transfer tools. It opens as a d
   - warnings.
 - Every number has units, and the units can be switched (km / AU, m/s / km/s, kg / t).
 - Keyboard first for frequent actions:
-  - cycling the active ship, and jumping to the next idle ship;
+  - flying the selected ship (A), cycling the active ship, and jumping to the next idle ship;
   - cycling focus, setting a target;
   - adding a node or arc;
   - warp steps, plane snapping;
