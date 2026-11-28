@@ -27,7 +27,7 @@ function Rows({ rows }: { rows: [string, string][] }) {
 }
 
 const tonnes = (kg: number) =>
-  `${(kg / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })} t`;
+  `${(kg / 1000).toLocaleString('en-US', { maximumFractionDigits: 1, useGrouping: false })} t`;
 
 /**
  * The selected ship, or the ship of the selected node (S3-21, minimal): design and status; the

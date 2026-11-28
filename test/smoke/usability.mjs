@@ -190,15 +190,15 @@ async function run(page, check) {
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await sleep(100);
   await type(page, 'Prograde', `${TLI.dv} km/s`);
-  const row = page.getByRole('button', { name: /^◆ Node 1/, expanded: true });
+  const nodeRow = page.getByRole('button', { name: /^◆ Node 1/, expanded: true });
   check(
-    (await row.count()) === 1 &&
+    (await nodeRow.count()) === 1 &&
       (await page.getByRole('region', { name: 'Node editor' }).count()) === 1 &&
       (await page.getByLabel('Δv left after plan').isVisible()),
     "6. the node's row is expanded inside the ship inspector, with Δv left after plan",
   );
   const pro = await page.getByLabel('Prograde', { exact: true }).inputValue();
-  check(pro === '3,130.5 m/s', `6. the Prograde field reads "3,130.5 m/s" (${pro})`);
+  check(pro === '3130.5 m/s', `6. the Prograde field reads "3130.5 m/s" (${pro})`);
   const timeFits = await page
     .getByLabel('Time', { exact: true })
     .evaluate((el) => el.scrollWidth <= el.clientWidth);
@@ -259,30 +259,38 @@ async function run(page, check) {
   await wheel(page, -notches);
   check((await probe(page, 'gizmo'))?.visible === true, '8. zoomed back in, it shows again');
 
-  // 9. Frame ▾ (S5b-2, S5b-4).
+  // 9. The frame changes on focus or activation only (decision 183); Frame ▾ (S5b-4).
   await page.getByRole('tab', { name: 'System' }).click();
   const earthItem = page.getByRole('treeitem', { name: 'Earth', exact: true });
   if ((await earthItem.getAttribute('aria-expanded')) === 'false') {
     await earthItem.getByText('▸', { exact: true }).first().click();
   }
-  await page
-    .getByRole('treeitem', { name: 'Moon', exact: true })
-    .getByText('Moon', { exact: true })
-    .first()
-    .click();
+  const row = (name) =>
+    page.getByRole('treeitem', { name, exact: true }).getByText(name, { exact: true }).first();
+  await row('Moon').click();
   const frame9 = await probe(page, 'frame');
   check(
-    frame9.ref.kind === 'body' && frame9.ref.id === 'moon',
-    `9. selecting the Moon sets a fixed Moon frame (${JSON.stringify(frame9.ref)})`,
+    frame9.ref.kind === 'ship-parent' && frame9.bodyId === 'earth',
+    `9. selecting the Moon leaves the frame following the ship (${JSON.stringify(frame9.ref)})`,
   );
-  await page.getByRole('button', { name: /^Frame: Moon/ }).click();
+  await page.getByRole('button', { name: /^Frame: Earth \(Starship 4\)/ }).click();
   const options = await page.getByRole('menuitemradio').allTextContents();
   check(
     options.join(',') === 'Earth,Sun,Moon',
-    `9. Frame ▾ lists Earth, Sun and Moon (${options})`,
+    `9. Frame ▾ lists Earth, Sun and the selected Moon (${options})`,
   );
-  await page.getByRole('menuitemradio', { name: 'Earth' }).click();
-  check((await probe(page, 'frame')).bodyId === 'earth', '9. choosing Earth sets the frame');
+  await page.getByRole('menuitemradio', { name: 'Moon' }).click();
+  const moonFrame = await probe(page, 'frame');
+  check(
+    moonFrame.ref.kind === 'body' && moonFrame.bodyId === 'moon',
+    '9. choosing Moon sets a fixed Moon frame',
+  );
+  await row('Earth').dblclick();
+  const earthFrame = await probe(page, 'frame');
+  check(
+    earthFrame.ref.kind === 'body' && earthFrame.bodyId === 'earth',
+    `9. focusing Earth sets the frame to Earth (${JSON.stringify(earthFrame.ref)})`,
+  );
 
   // 10. A non-active ship's plan is read-only (S5b-8).
   await page.getByRole('tab', { name: 'Fleets' }).click();

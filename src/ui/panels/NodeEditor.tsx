@@ -12,7 +12,7 @@ import { planDetails, resultText, type NodeDetails } from './planDetails';
 
 const kg = (m: number) =>
   m >= 1000
-    ? `${(m / 1000).toLocaleString('en-US', { maximumFractionDigits: 2 })} t`
+    ? `${(m / 1000).toLocaleString('en-US', { maximumFractionDigits: 2, useGrouping: false })} t`
     : `${m.toFixed(0)} kg`;
 const AXES: { key: keyof LocalDv; label: string }[] = [
   { key: 'prograde', label: 'Prograde' },

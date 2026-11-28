@@ -70,7 +70,7 @@ interface ViewState {
   hovered: MapObjectRef | null;
   /** The camera's centre (S2-13, S5b-5). */
   focus: FocusRef;
-  /** The body trajectories are drawn relative to (S5b-1); set by selecting and activating. */
+  /** The body trajectories are drawn relative to (S5b-1); set by focusing and activating (decision 183). */
   frame: FrameRef;
   /** The ship flown: map editing, the strip, warp-to. Set only by `activate` (S5b-6). */
   activeShipId: ShipId | null;
@@ -89,10 +89,10 @@ interface ViewState {
   toggleLeftPanel(): void;
   toggleRightPanel(): void;
   setLeftTab(tab: LeftTab): void;
-  /** Selects, and sets the frame by S5b-2 (a null selection leaves the frame alone). */
+  /** Selects. It never changes the focus, the frame or the active ship (decision 183). */
   select(ref: MapObjectRef | null): void;
   setHovered(ref: MapObjectRef | null): void;
-  /** Focuses and selects; a node focuses its ship and selects the node. */
+  /** Focuses and selects, and sets the frame (decision 183); a node focuses its ship. */
   focusOn(ref: MapObjectRef): void;
   /** Makes a coasting ship active, and the frame follows it (S5b-3, S5b-6). */
   activate(id: ShipId): void;
@@ -118,10 +118,11 @@ function viewTimeOf(preview: Preview | null): number {
 }
 
 /**
- * The frame a selection sets (S5b-2, S5b-3): a body is itself; the active ship (or its node) is
- * followed; any other ship (or its node) gives its parent at the view time, as a fixed body.
+ * The frame a focus sets (decision 183, revising S5b-2): a body is itself; the active ship (or
+ * its node) is followed; any other ship (or its node) gives its parent at the view time, as a
+ * fixed body.
  */
-function frameForSelection(
+function frameForFocus(
   ref: MapObjectRef,
   activeShipId: ShipId | null,
   preview: Preview | null,
@@ -154,12 +155,7 @@ export const useView = create<ViewState>()((set) => ({
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftTab: (tab) => set({ leftTab: tab }),
-  select: (ref) =>
-    set((s) =>
-      ref === null
-        ? { selected: null }
-        : { selected: ref, frame: frameForSelection(ref, s.activeShipId, s.preview) },
-    ),
+  select: (ref) => set({ selected: ref }),
   activate: (id) =>
     set((s) =>
       useWorld.getState().world.ships[id]?.status === 'coasting'
@@ -173,7 +169,7 @@ export const useView = create<ViewState>()((set) => ({
     set((s) => ({
       focus: focusRefOf(ref),
       selected: ref,
-      frame: frameForSelection(ref, s.activeShipId, s.preview),
+      frame: frameForFocus(ref, s.activeShipId, s.preview),
       focusSeq: s.focusSeq + 1,
     })),
   snapTo: (plane) => set((s) => ({ snapRequest: { plane, seq: (s.snapRequest?.seq ?? 0) + 1 } })),

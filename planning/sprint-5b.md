@@ -600,4 +600,4 @@ Choices made while building, beyond the decisions above. They are logged in [dec
 8. **Read-only** is enforced in the UI, including the Delete key, which now only deletes the active ship's node. The actions don't check activation (S5b-8).
 9. **Popover Esc** is caught on the window in the capture phase and stops propagation, so neither `useMapKeys` nor the field's own Escape sees it.
 10. **The smoke test.** `usability.mjs` follows §7's thirteen checks. For the strip's shading it adds a retrograde node before the TLI, so the prediction ends at an impact within 10 years, then deletes it. For the frame following the ship it runs the clock through the TLI node, then warps to the Moon SOI entry. Its TLI constant is checked by `constants.test.ts` with the others.
-
+11. **Revised after testing.** Selecting no longer sets the frame: only a focus change or activating a ship does, plus Frame ▾ (decision 183, revising S5b-2). And no numeric format groups digits (decision 182, revising S5b-18's `3,131.0 m/s`), because the node fields couldn't read back the values they showed.

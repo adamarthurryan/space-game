@@ -52,45 +52,52 @@ describe('the active ship (S5b-6)', () => {
   });
 });
 
-describe('the reference frame (S5b-1 to S5b-4)', () => {
+describe('the reference frame (S5b-1, decision 183)', () => {
   it('starts on Earth', () => {
     expect(useView.getState().frame).toEqual({ kind: 'body', id: 'earth' });
   });
 
-  it('is the selected body', () => {
-    useView.getState().select({ kind: 'body', id: 'mars' });
+  it('is not changed by selecting anything', () => {
+    const v = useView.getState();
+    v.select({ kind: 'body', id: 'mars' });
+    v.select({ kind: 'ship', id: 'ship-3' });
+    v.select({ kind: 'node', shipId: 'ship-3', id: 'node-1' });
+    v.select(null);
+    expect(useView.getState().frame).toEqual({ kind: 'body', id: 'earth' });
+    v.activate('ship-3');
+    v.select({ kind: 'body', id: 'mars' });
+    expect(useView.getState().frame).toEqual({ kind: 'ship-parent', shipId: 'ship-3' });
+  });
+
+  it('is the focused body', () => {
+    useView.getState().focusOn({ kind: 'body', id: 'mars' });
     expect(useView.getState().frame).toEqual({ kind: 'body', id: 'mars' });
   });
 
-  it("is a non-active ship's parent, fixed, for the ship or its node", () => {
+  it("is a focused non-active ship's parent, fixed, for the ship or its node", () => {
     // Heron (ship-3) orbits the Moon.
-    useView.getState().select({ kind: 'ship', id: 'ship-3' });
+    useView.getState().focusOn({ kind: 'ship', id: 'ship-3' });
     expect(useView.getState().frame).toEqual({ kind: 'body', id: 'moon' });
-    useView.getState().select({ kind: 'body', id: 'sun' });
-    useView.getState().select({ kind: 'node', shipId: 'ship-3', id: 'node-1' });
+    useView.getState().focusOn({ kind: 'body', id: 'sun' });
+    useView.getState().focusOn({ kind: 'node', shipId: 'ship-3', id: 'node-1' });
     expect(useView.getState().frame).toEqual({ kind: 'body', id: 'moon' });
   });
 
-  it('follows the active ship when it is selected or activated', () => {
+  it('follows the active ship when it is activated or focused', () => {
     const v = useView.getState();
-    v.select({ kind: 'body', id: 'mars' });
+    v.focusOn({ kind: 'body', id: 'mars' });
     v.activate('ship-3');
     expect(useView.getState().frame).toEqual({ kind: 'ship-parent', shipId: 'ship-3' });
-    v.select({ kind: 'body', id: 'mars' });
-    v.select({ kind: 'ship', id: 'ship-3' });
-    expect(useView.getState().frame).toEqual({ kind: 'ship-parent', shipId: 'ship-3' });
+    v.focusOn({ kind: 'body', id: 'mars' });
     v.focusOn({ kind: 'node', shipId: 'ship-3', id: 'node-1' });
     expect(useView.getState().frame).toEqual({ kind: 'ship-parent', shipId: 'ship-3' });
   });
 
-  it('setFrame stops following; clearing the selection leaves the frame alone', () => {
+  it('setFrame fixes it, and stops following', () => {
     const v = useView.getState();
     v.activate('ship-3');
     v.setFrame('earth');
     expect(useView.getState().frame).toEqual({ kind: 'body', id: 'earth' });
-    v.select({ kind: 'body', id: 'mars' });
-    v.select(null);
-    expect(useView.getState().frame).toEqual({ kind: 'body', id: 'mars' });
   });
 });
 

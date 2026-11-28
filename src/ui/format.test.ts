@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calendarFromJd } from '../math/time';
+import { parseSpeed } from './parse';
 import {
   formatAngle,
   formatCountdown,
@@ -51,8 +52,8 @@ describe('formatWarp', () => {
 
 describe('formatDistance', () => {
   it('uses km with separators below 1e7 km, AU above', () => {
-    expect(formatDistance(6771.4)).toBe('6,771 km');
-    expect(formatDistance(9_999_999)).toBe('9,999,999 km');
+    expect(formatDistance(6771.4)).toBe('6771 km');
+    expect(formatDistance(9_999_999)).toBe('9999999 km');
     expect(formatDistance(2.28e8)).toBe('1.524 AU');
     expect(formatDistance(11.08)).toBe('11.1 km');
     expect(formatDistance(Infinity)).toBe('∞');
@@ -104,12 +105,29 @@ describe('formatCountdown', () => {
 });
 
 describe('formatDv (S5b-18)', () => {
-  it('is m/s with a thousands separator and one decimal, with a sign', () => {
-    expect(formatDv(3.1305)).toBe('3,130.5 m/s');
+  it('is m/s with one decimal, no digit grouping, and a sign', () => {
+    expect(formatDv(3.1305)).toBe('3130.5 m/s');
     expect(formatDv(0.0004)).toBe('0.4 m/s');
     expect(formatDv(-0.012)).toBe('−12.0 m/s');
     expect(formatDv(0)).toBe('0.0 m/s');
     expect(formatDv(-0.00001)).toBe('0.0 m/s');
-    expect(formatDv(12.34567)).toBe('12,345.7 m/s');
+    expect(formatDv(12.34567)).toBe('12345.7 m/s');
+  });
+});
+
+describe('no digit grouping (decision 182)', () => {
+  it('never puts a comma in a number', () => {
+    for (const x of [0.5, 999, 1234.5, 98_765.4, 9_999_999]) {
+      expect(formatDistance(x)).not.toContain(',');
+      expect(formatSpeed(x)).not.toContain(',');
+      expect(formatSpeed(x / 1000)).not.toContain(',');
+      expect(formatDv(x)).not.toContain(',');
+    }
+  });
+
+  it('a plan Δv reads back as typed input', () => {
+    for (const kmps of [3.1305, -12.3456, 0.0004, 45.6789]) {
+      expect(parseSpeed(formatDv(kmps))).toBeCloseTo(kmps, 4);
+    }
   });
 });

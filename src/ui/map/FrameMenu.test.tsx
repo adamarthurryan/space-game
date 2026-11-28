@@ -13,8 +13,9 @@ const items = () => screen.getAllByRole('menuitemradio').map((e) => e.textConten
 describe('FrameMenu (S5b-4)', () => {
   it('shows the frame, and lists the focus body, its parents and the selected body', () => {
     render(<FrameMenu />);
+    // Selecting the Moon doesn't change the frame (decision 183), but offers it.
     act(() => useView.getState().select({ kind: 'body', id: 'moon' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Frame: Moon ▾' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame: Earth ▾' }));
     expect(items()).toEqual(['Earth', 'Sun', 'Moon']);
   });
 

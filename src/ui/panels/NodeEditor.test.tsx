@@ -71,7 +71,7 @@ describe('NodeEditor', () => {
     setUp();
     render(<Inspector />);
     const editor = screen.getByRole('region', { name: 'Node editor' });
-    expect(field('Prograde').value).toBe('3,130.5 m/s');
+    expect(field('Prograde').value).toBe('3130.5 m/s');
     expect(within(editor).getByText('Burn duration').nextElementSibling?.textContent).toMatch(
       /min/,
     );
@@ -85,6 +85,10 @@ describe('NodeEditor', () => {
     expect(useWorld.getState().world.ships[shipId]!.plan[0]!.dv.prograde).toBeCloseTo(0.1, 12);
     expect(screen.getByLabelText('Result').textContent).toMatch(/^Earth orbit/);
     type('Normal', '-0.2 km/s');
+    // A shown value is accepted back as typed (decision 182).
+    type('Prograde', '3130.5 m/s');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(useWorld.getState().world.ships[shipId]!.plan[0]!.dv.prograde).toBeCloseTo(3.1305, 12);
     expect(useWorld.getState().world.ships[shipId]!.plan[0]!.dv.normal).toBeCloseTo(-0.2, 12);
   });
 
@@ -101,7 +105,7 @@ describe('NodeEditor', () => {
   it('shows an over-budget node in red', () => {
     setUp(9);
     render(<Inspector />);
-    expect(screen.getByText(/^Over budget: \d,\d{3}\.\d m\/s of 9,000\.0 m\/s$/)).toBeTruthy();
+    expect(screen.getByText(/^Over budget: \d{4}\.\d m\/s of 9000\.0 m\/s$/)).toBeTruthy();
   });
 
   it('disables, snaps and deletes', () => {
