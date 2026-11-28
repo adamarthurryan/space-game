@@ -85,8 +85,8 @@ async function run(page, check) {
   check(m.webgl, 'canvas has a WebGL context');
   const tabs = await page.getByRole('tab').allTextContents();
   check(
-    tabs.join(',') === 'System,Fleets,Stations,Routes',
-    `sidebar has four tabs (${tabs.join(', ')})`,
+    tabs.join(',') === 'System,Fleets',
+    `sidebar has the System and Fleets tabs (S5b-22) (${tabs.join(', ')})`,
   );
   if (m.header && m.nav && m.main && m.aside && m.footer) {
     check(

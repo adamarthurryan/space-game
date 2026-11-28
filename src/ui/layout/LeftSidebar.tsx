@@ -4,14 +4,15 @@ import { FleetList } from '../panels/FleetList';
 import { SystemTree } from '../panels/SystemTree';
 import styles from './LeftSidebar.module.css';
 
-const TABS: { id: LeftTab; label: string; empty: string }[] = [
-  { id: 'system', label: 'System', empty: '' },
-  { id: 'fleets', label: 'Fleets', empty: 'No ships yet.' },
-  { id: 'stations', label: 'Stations', empty: 'No stations yet.' },
-  { id: 'routes', label: 'Routes', empty: 'No routes yet.' },
+const TABS: { id: LeftTab; label: string }[] = [
+  { id: 'system', label: 'System' },
+  { id: 'fleets', label: 'Fleets' },
 ];
 
-/** Tabs for the System, Fleets, Stations and Routes lists, and the map filters. */
+/**
+ * Tabs for the System and Fleets lists. The Stations and Routes tabs and the Filters panel are
+ * hidden until they are built (S5b-22 in planning/sprint-5b.md).
+ */
 export function LeftSidebar() {
   const leftTab = useView((s) => s.leftTab);
   const setLeftTab = useView((s) => s.setLeftTab);
@@ -58,18 +59,8 @@ export function LeftSidebar() {
         id="left-tabpanel"
         aria-labelledby={`left-tab-${active.id}`}
       >
-        {active.id === 'system' ? (
-          <SystemTree />
-        ) : active.id === 'fleets' ? (
-          <FleetList />
-        ) : (
-          <p className={styles['empty']}>{active.empty}</p>
-        )}
+        {active.id === 'system' ? <SystemTree /> : <FleetList />}
       </div>
-      <details className={styles['filters']}>
-        <summary>Filters</summary>
-        <p className={styles['empty']}>No filters yet.</p>
-      </details>
     </nav>
   );
 }

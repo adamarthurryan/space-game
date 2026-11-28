@@ -2,8 +2,9 @@ import { useView } from '../../store/useView';
 import styles from './TopBar.module.css';
 
 /**
- * Title, menu, panel toggles, and warning and alarm counts. The phase, reserves and stockpile
- * summary from the interface.md mock-up arrive in milestone 3 and later.
+ * The title and the panel toggles. The menu (saves, sprint 10), the warning and alarm counts
+ * (sprint 6 and later), and the phase, reserves and stockpile summary from the interface.md
+ * mock-up are hidden until they are built (S5b-22 in planning/sprint-5b.md).
  */
 export function TopBar() {
   const leftPanelOpen = useView((s) => s.leftPanelOpen);
@@ -13,19 +14,8 @@ export function TopBar() {
 
   return (
     <header className={styles['bar']}>
-      <button type="button" className={styles['button']} aria-label="Menu" disabled>
-        ≡
-      </button>
       <h1 className={styles['title']}>Sandbox</h1>
       <div className={styles['spacer']} />
-      <div className={styles['counts']}>
-        <span title="Warnings">
-          <span aria-hidden="true">⚠ </span>0<span className={styles['srOnly']}> warnings</span>
-        </span>
-        <span title="Alarms">
-          <span aria-hidden="true">⏰ </span>0<span className={styles['srOnly']}> alarms</span>
-        </span>
-      </div>
       <button
         type="button"
         className={styles['button']}

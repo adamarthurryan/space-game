@@ -59,7 +59,7 @@ export interface Flash {
 }
 
 /** Tabs of the left sidebar. */
-export type LeftTab = 'system' | 'fleets' | 'stations' | 'routes';
+export type LeftTab = 'system' | 'fleets';
 
 interface ViewState {
   leftPanelOpen: boolean;

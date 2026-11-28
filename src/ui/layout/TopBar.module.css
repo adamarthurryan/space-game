@@ -19,13 +19,6 @@
   flex: 1;
 }
 
-.counts {
-  display: flex;
-  gap: 12px;
-  font-family: var(--font-mono);
-  color: var(--color-text-dim);
-}
-
 .button {
   min-width: 28px;
   height: 26px;
@@ -48,13 +41,4 @@
 .button[aria-pressed='true'] {
   border-color: var(--color-accent);
   color: var(--color-accent);
-}
-
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
