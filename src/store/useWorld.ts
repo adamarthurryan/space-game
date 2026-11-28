@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createSandboxWorld } from '../gen/scenario';
 import * as actions from '../game/actions';
-import type { ActionResult, NodeEdit, SpawnShipParams } from '../game/actions';
+import type { ActionResult, AlarmParams, NodeEdit, SpawnShipParams } from '../game/actions';
+import { registerAlarmHandlers, type AlarmId } from '../sim/alarms';
+import type { FleetId } from '../sim/fleet';
 import type { LocalDv } from '../orbital/frames';
 import type { PassageKind } from '../orbital/passages';
 import type { PausableEvent } from '../sim/clock';
@@ -40,13 +42,27 @@ interface WorldState {
   snapNode(shipId: ShipId, nodeId: NodeId, to: 'periapsis' | 'apoapsis'): ActionResult;
   setPauseOn(type: PausableEvent | 'all', on: boolean): ActionResult;
   warpToNode(shipId: ShipId, nodeId: NodeId): ActionResult;
-  warpToNextEvent(shipId: ShipId | null): ActionResult<UpcomingEvent>;
+  warpToNextEvent(ships: ShipId | readonly ShipId[] | null): ActionResult<UpcomingEvent>;
   cancelWarpTo(): ActionResult;
+  createFleet(name?: string): ActionResult<FleetId>;
+  renameFleet(id: FleetId, name: string): ActionResult;
+  deleteFleet(id: FleetId): ActionResult;
+  assignShip(shipId: ShipId, fleetId: FleetId | null): ActionResult;
+  addAlarm(p: AlarmParams): ActionResult<AlarmId>;
+  editAlarm(
+    id: AlarmId,
+    p: Partial<Omit<AlarmParams, 'scope'>> & { enabled?: boolean },
+  ): ActionResult;
+  deleteAlarm(id: AlarmId): ActionResult;
+  setAlarmForEvent(e: UpcomingEvent, leadTime: number): ActionResult<AlarmId>;
+  dismissNotification(id: string): ActionResult;
+  dismissAllNotifications(): ActionResult;
 }
 
 function createRegistry(): EventRegistry {
   const reg = createEventRegistry();
   registerShipHandlers(reg);
+  registerAlarmHandlers(reg);
   return reg;
 }
 
@@ -74,8 +90,18 @@ export const useWorld = create<WorldState>()((set, get) => {
     snapNode: (id, nodeId, to) => act((w) => actions.snapNode(w, id, nodeId, to)),
     setPauseOn: (type, on) => act((w) => actions.setPauseOn(w, type, on)),
     warpToNode: (id, nodeId) => act((w) => actions.warpToNode(w, id, nodeId)),
-    warpToNextEvent: (id) => act((w) => actions.warpToNextEvent(w, id)),
+    warpToNextEvent: (ships) => act((w) => actions.warpToNextEvent(w, ships)),
     cancelWarpTo: () => act(actions.cancelWarpTo),
+    createFleet: (name) => act((w) => actions.createFleet(w, name)),
+    renameFleet: (id, name) => act((w) => actions.renameFleet(w, id, name)),
+    deleteFleet: (id) => act((w) => actions.deleteFleet(w, id)),
+    assignShip: (shipId, fleetId) => act((w) => actions.assignShip(w, shipId, fleetId)),
+    addAlarm: (p) => act((w) => actions.addAlarm(w, p)),
+    editAlarm: (id, p) => act((w) => actions.editAlarm(w, id, p)),
+    deleteAlarm: (id) => act((w) => actions.deleteAlarm(w, id)),
+    setAlarmForEvent: (e, lead) => act((w) => actions.setAlarmForEvent(w, e, lead)),
+    dismissNotification: (id) => act((w) => actions.dismissNotification(w, id)),
+    dismissAllNotifications: () => act(actions.dismissAllNotifications),
   };
 });
 

@@ -32,8 +32,21 @@ import {
   renameFleet as simRenameFleet,
   type FleetId,
 } from '../sim/fleet';
+import {
+  addAlarm as simAddAlarm,
+  ALARM_EVENT_TYPES,
+  deleteAlarm as simDeleteAlarm,
+  deleteNodeAlarms,
+  MAX_LEAD_TIME,
+  updateAlarm,
+  type AlarmAction,
+  type AlarmId,
+  type AlarmPatch,
+  type AlarmScope,
+  type AlarmTrigger,
+} from '../sim/alarms';
 import { createShip, shipStats, type OrbitState, type Ship, type ShipId } from '../sim/ship';
-import { computeTrajectory, segmentStateAt, type Segment } from '../sim/trajectory';
+import { assertNever, computeTrajectory, segmentStateAt, type Segment } from '../sim/trajectory';
 import {
   eventLabel,
   MIN_WARP_TO,
@@ -324,6 +337,7 @@ export function deleteNode(world: World, shipId: ShipId, nodeId: NodeId): Action
   const i = ship.plan.findIndex((n) => n.id === nodeId);
   if (i < 0) return fail(`Unknown node: ${nodeId}`);
   ship.plan.splice(i, 1);
+  deleteNodeAlarms(world, shipId, nodeId);
   refreshShip(world, shipId);
   return ok();
 }
@@ -387,15 +401,19 @@ export function warpToNode(world: World, shipId: ShipId, nodeId: NodeId): Action
 }
 
 /**
- * Warps to the ship's next event, or to the earliest of any ship's if shipId is null (S5-5): a
- * node stops WARP_TO_NODE_LEAD before it, any other event just after it is handled.
+ * Warps to the ship's next event, the earliest of several ships' (the timeline's shown ships,
+ * S6-25), or of any ship's if null (S5-5): a node stops WARP_TO_NODE_LEAD before it, any other
+ * event just after it is handled.
  */
-export function warpToNextEvent(world: World, shipId: ShipId | null): ActionResult<UpcomingEvent> {
-  if (shipId !== null) {
-    const ship = plannable(world, shipId);
+export function warpToNextEvent(
+  world: World,
+  ships: ShipId | readonly ShipId[] | null,
+): ActionResult<UpcomingEvent> {
+  if (typeof ships === 'string') {
+    const ship = plannable(world, ships);
     if (isFail(ship)) return ship;
   }
-  const e = nextWarpStop(world, shipId);
+  const e = nextWarpStop(world, typeof ships === 'string' ? [ships] : ships);
   if (!e) return fail('No upcoming events');
   startWarpTo(world.clock, {
     t: warpStopTime(e),
@@ -442,5 +460,135 @@ export function assignShip(world: World, shipId: ShipId, fleetId: FleetId | null
   if (!world.ships[shipId]) return fail(`Unknown ship: ${shipId}`);
   if (fleetId !== null && !world.fleets[fleetId]) return fail(`Unknown fleet: ${fleetId}`);
   simAssignShip(world, shipId, fleetId);
+  return ok();
+}
+
+// ---- Alarms (decisions S6-12 to S6-21 in planning/sprint-6.md) -----------------------------
+
+export interface AlarmParams {
+  scope: AlarmScope;
+  trigger: AlarmTrigger;
+  leadTime: number;
+  action: AlarmAction;
+}
+
+/** Why an alarm can't be set as given, or null (S6-12). */
+function alarmError(world: World, p: AlarmParams): string | null {
+  const { scope, trigger } = p;
+  if (scope.kind === 'ship' && !world.ships[scope.shipId]) return `Unknown ship: ${scope.shipId}`;
+  if (scope.kind === 'fleet' && !world.fleets[scope.fleetId]) {
+    return `Unknown fleet: ${scope.fleetId}`;
+  }
+  if (!Number.isFinite(p.leadTime) || p.leadTime < 0) return 'The lead time must be 0 or more';
+  if (p.leadTime > MAX_LEAD_TIME) return 'The lead time is longer than 10 years';
+  if (p.action !== 'pause' && p.action !== 'drop-warp')
+    return `Unknown action: ${String(p.action)}`;
+  switch (trigger.kind) {
+    case 'plan-item': {
+      if (scope.kind !== 'ship') return 'A node alarm needs a ship';
+      const ship = world.ships[scope.shipId]!;
+      if (!ship.plan.some((n) => n.id === trigger.itemId)) {
+        return `Unknown node: ${trigger.itemId}`;
+      }
+      return null;
+    }
+    case 'event-type': {
+      if (!ALARM_EVENT_TYPES.includes(trigger.type)) return `Unknown event type: ${trigger.type}`;
+      if (trigger.targetId !== undefined) {
+        if (trigger.type === 'node') return 'A node alarm has no body';
+        const body = world.system.bodies[trigger.targetId];
+        if (!body) return `Unknown body: ${trigger.targetId}`;
+        if (!body.major) return `${body.name} is a minor body: it has no SOI`;
+      }
+      return null;
+    }
+    case 'time':
+      if (scope.kind !== 'global') return 'A time alarm covers every ship';
+      if (!Number.isFinite(trigger.t) || trigger.t <= world.clock.t) return 'The time has passed';
+      return null;
+    default:
+      return assertNever(trigger);
+  }
+}
+
+/** Sets an alarm, enabled. */
+export function addAlarm(world: World, p: AlarmParams): ActionResult<AlarmId> {
+  const error = alarmError(world, p);
+  if (error) return fail(error);
+  return { ok: true, value: simAddAlarm(world, { ...p, enabled: true }) };
+}
+
+/** Changes an alarm's trigger, lead time, action or enabled flag. Its scope is fixed. */
+export function editAlarm(
+  world: World,
+  id: AlarmId,
+  p: Partial<Omit<AlarmParams, 'scope'>> & { enabled?: boolean },
+): ActionResult {
+  const alarm = world.alarms[id];
+  if (!alarm) return fail(`Unknown alarm: ${id}`);
+  const next: AlarmParams = {
+    scope: alarm.scope,
+    trigger: p.trigger ?? alarm.trigger,
+    leadTime: p.leadTime ?? alarm.leadTime,
+    action: p.action ?? alarm.action,
+  };
+  // An unchanged time trigger that has passed is fine to keep while editing the rest.
+  const error = p.trigger || next.trigger.kind !== 'time' ? alarmError(world, next) : null;
+  if (error) return fail(error);
+  const patch: AlarmPatch = {};
+  if (p.trigger) patch.trigger = p.trigger;
+  if (p.leadTime !== undefined) patch.leadTime = p.leadTime;
+  if (p.action !== undefined) patch.action = p.action;
+  if (p.enabled !== undefined) patch.enabled = p.enabled;
+  updateAlarm(world, id, patch);
+  return ok();
+}
+
+export function deleteAlarm(world: World, id: AlarmId): ActionResult {
+  if (!world.alarms[id]) return fail(`Unknown alarm: ${id}`);
+  simDeleteAlarm(world, id);
+  return ok();
+}
+
+/**
+ * An alarm on one upcoming event (S6-20): a plan-item alarm for a node; for any other event, a
+ * once alarm on its kind, narrowed to its body (the body entered, left or hit). Pauses.
+ */
+export function setAlarmForEvent(
+  world: World,
+  e: UpcomingEvent,
+  leadTime: number,
+): ActionResult<AlarmId> {
+  if (e.t <= world.clock.t) return fail('The event has passed');
+  const scope: AlarmScope = { kind: 'ship', shipId: e.shipId };
+  let trigger: AlarmTrigger;
+  switch (e.kind) {
+    case 'node':
+      if (!e.nodeId) return fail('Unknown node');
+      trigger = { kind: 'plan-item', itemId: e.nodeId };
+      break;
+    case 'soi-enter':
+    case 'impact':
+      trigger = { kind: 'event-type', type: e.kind, once: true };
+      if (e.bodyId) trigger.targetId = e.bodyId;
+      break;
+    case 'soi-exit':
+      trigger = { kind: 'event-type', type: 'soi-exit', targetId: e.parentId, once: true };
+      break;
+    default:
+      return assertNever(e.kind);
+  }
+  return addAlarm(world, { scope, trigger, leadTime, action: 'pause' });
+}
+
+export function dismissNotification(world: World, id: string): ActionResult {
+  const n = world.notifications.find((x) => x.id === id);
+  if (!n) return fail(`Unknown notification: ${id}`);
+  n.dismissed = true;
+  return ok();
+}
+
+export function dismissAllNotifications(world: World): ActionResult {
+  for (const n of world.notifications) n.dismissed = true;
   return ok();
 }

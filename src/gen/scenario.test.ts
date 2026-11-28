@@ -2,7 +2,7 @@ import { DEFAULT_PAUSE_ON } from '../sim/clock';
 import { describe, expect, it } from 'vitest';
 import { jdFromCalendar } from '../math/time';
 import { validateBodySystem } from '../sim/body';
-import { createSandboxWorld, SANDBOX_EPOCH_JD } from './scenario';
+import { createSandboxWorld, DEFAULT_IMPACT_LEAD, SANDBOX_EPOCH_JD } from './scenario';
 
 describe('sandbox scenario', () => {
   it('starts at 2030-01-01 00:00 TDB', () => {
@@ -27,5 +27,22 @@ describe('sandbox scenario', () => {
 
   it('is deterministic', () => {
     expect(createSandboxWorld()).toEqual(createSandboxWorld());
+  });
+
+  it('has the default impact alarm, (S6-23)', () => {
+    const w = createSandboxWorld();
+    expect(Object.values(w.alarms)).toEqual([
+      {
+        id: 'alarm-1',
+        seq: 1,
+        scope: { kind: 'global' },
+        trigger: { kind: 'event-type', type: 'impact' },
+        leadTime: DEFAULT_IMPACT_LEAD,
+        action: 'pause',
+        enabled: true,
+        isDefault: true,
+        fired: {},
+      },
+    ]);
   });
 });

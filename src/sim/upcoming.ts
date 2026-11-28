@@ -108,10 +108,14 @@ export const MIN_WARP_TO = 1;
 
 /**
  * The next event worth warping to (S5-5): enabled, with its stop at least MIN_WARP_TO after now.
- * For one ship, or for every coasting ship if shipId is null (the earliest stop wins).
+ * For one ship, several (S6-25), or every coasting ship if null (the earliest stop wins).
  */
-export function nextWarpStop(world: World, shipId: ShipId | null): UpcomingEvent | null {
-  const ids = shipId === null ? Object.keys(world.ships) : [shipId];
+export function nextWarpStop(
+  world: World,
+  ships: ShipId | readonly ShipId[] | null,
+): UpcomingEvent | null {
+  const ids =
+    ships === null ? Object.keys(world.ships) : typeof ships === 'string' ? [ships] : ships;
   const now = world.clock.t;
   let best: UpcomingEvent | null = null;
   for (const id of ids) {
