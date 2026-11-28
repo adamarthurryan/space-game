@@ -1,4 +1,4 @@
-import { useView, type MapObjectRef } from '../../store/useView';
+import { mapSelection, useView, type MapObjectRef } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { DRAG_THRESHOLD_PX } from '../camera/controller';
 import { resolveFrameBody, type MapFrame } from '../mapFrame';
@@ -57,7 +57,7 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
     if (ref.shipId !== view.activeShipId || previewing()) return false;
     const placed = frame.nodes.find((n) => n.shipId === ref.shipId && n.nodeId === ref.id);
     if (!placed || placed.occluded) return false;
-    return !(sameRef(view.selected, ref) && gizmo.tooSmall);
+    return !(sameRef(mapSelection(view.selected), ref) && gizmo.tooSmall);
   };
   /** The ghost under the pointer, when nothing else is (S4-12); none in a preview. */
   const updateGhost = (e: MouseEvent, hit: MapObjectRef | null) => {
@@ -110,7 +110,7 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
     const view = useView.getState();
     // The selected node's gizmo is hidden at small scale (S5b-15): say how to get it back.
     el.title =
-      hit?.kind === 'node' && sameRef(view.selected, hit) && gizmo.tooSmall
+      hit?.kind === 'node' && sameRef(mapSelection(view.selected), hit) && gizmo.tooSmall
         ? 'Zoom in to drag the node'
         : '';
     if (!sameRef(view.hovered, hit)) view.setHovered(hit);

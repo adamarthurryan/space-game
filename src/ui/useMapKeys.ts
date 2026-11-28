@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { focusRefOf, shipOf, useView } from '../store/useView';
+import { mapSelection, focusRefOf, shipOf, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 
 /**
@@ -7,7 +7,7 @@ import { useWorld } from '../store/useWorld';
  * coasting ship (S3-15).
  */
 export function canSnapToSelectedOrbit(): boolean {
-  const selected = useView.getState().selected;
+  const selected = mapSelection(useView.getState().selected);
   if (!selected) return false;
   const world = useWorld.getState().world;
   const ref = focusRefOf(selected);
@@ -47,10 +47,12 @@ export function useMapKeys(): void {
           world.warpUp();
           break;
         case 'f':
-        case 'F':
-          if (!view.selected) return;
-          view.focusOn(view.selected);
+        case 'F': {
+          const sel = mapSelection(view.selected);
+          if (!sel) return;
+          view.focusOn(sel);
           break;
+        }
         case 'a':
         case 'A': {
           // Flies the selected ship, or the selected node's ship (S5b-6).

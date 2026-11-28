@@ -1,4 +1,4 @@
-import { focusRefOf, useView } from '../../store/useView';
+import { mapSelection, focusRefOf, useView } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { FlyButton } from './FlyButton';
 import { FrameMenu } from './FrameMenu';
@@ -9,7 +9,7 @@ import styles from './MapToolbar.module.css';
  * Fly (S5b-7).
  */
 export function MapToolbar() {
-  const selected = useView((s) => s.selected);
+  const selected = mapSelection(useView((s) => s.selected));
   const world = useWorld((s) => s.world);
   // Ships change status as the sim runs; the version says when.
   useWorld((s) => s.version);

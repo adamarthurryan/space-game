@@ -3,7 +3,7 @@ import { cross, normalize, vec3, type Vec3 } from '../../math/vec3';
 import { meanOrbitNormal } from '../../orbital/propagate';
 import { getBody } from '../../sim/body';
 import { shipPointAt, type World } from '../../sim/world';
-import { focusRefOf, useView, type FocusRef } from '../../store/useView';
+import { mapSelection, focusRefOf, useView, type FocusRef } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { mapObjectWorldInto, type MapFrame } from '../mapFrame';
 import { viewTime } from '../previewTime';
@@ -44,7 +44,7 @@ function currentViewTime(): number {
 /** The pole for a snap request, or null if the request can't be met. */
 function snapPole(plane: 'ecliptic' | 'selected-orbit'): Vec3 | null {
   if (plane === 'ecliptic') return vec3(0, 0, 1);
-  const selected = useView.getState().selected;
+  const selected = mapSelection(useView.getState().selected);
   // Evaluated once, at the time of the snap, then kept fixed (S2-12).
   return selected
     ? orbitPoleOf(useWorld.getState().world, focusRefOf(selected), currentViewTime())

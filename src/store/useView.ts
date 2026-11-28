@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { BodyId } from '../sim/body';
+import type { FleetId } from '../sim/fleet';
 import type { NodeId } from '../sim/maneuver';
 import type { ShipId } from '../sim/ship';
 import { shipBodyAt } from '../sim/world';
@@ -10,12 +11,26 @@ export type FocusRef = { kind: 'body'; id: BodyId } | { kind: 'ship'; id: ShipId
 /** Something on the map that can be selected or hovered: also a ship's node (S4-10). */
 export type MapObjectRef = FocusRef | { kind: 'node'; shipId: ShipId; id: NodeId };
 
+/** What can be selected: a map object, or a fleet (S6-7 in planning/sprint-6.md). */
+export type SelectionRef = MapObjectRef | { kind: 'fleet'; id: FleetId };
+
+/** The selection as a map object: null for a fleet, which isn't on the map (S6-7). */
+export const mapSelection = (ref: SelectionRef | null): MapObjectRef | null =>
+  ref?.kind === 'fleet' ? null : ref;
+
+/** Whose events the timeline strip shows (S6-25). */
+export type ShowRef =
+  { kind: 'active' } | { kind: 'selection' } | { kind: 'fleet'; id: FleetId } | { kind: 'all' };
+
+/** The Fleets tab's status filter (S6-4). */
+export type FleetsFilter = 'all' | 'idle' | 'trouble';
+
 /** The object a ref focuses: a node focuses its ship (S4-10). */
 export const focusRefOf = (ref: MapObjectRef): FocusRef =>
   ref.kind === 'node' ? { kind: 'ship', id: ref.shipId } : ref;
 
 /** The ship a ref names: a ship, or a node's ship. */
-export const shipOf = (ref: MapObjectRef | null): ShipId | null =>
+export const shipOf = (ref: SelectionRef | null): ShipId | null =>
   ref?.kind === 'ship' ? ref.id : ref?.kind === 'node' ? ref.shipId : null;
 
 /** The active ship, if it still exists and isn't destroyed (S4-9). */
@@ -27,7 +42,7 @@ export function resolveActiveShip(
 }
 
 /** Whether two refs name the same object. */
-export const sameRef = (a: MapObjectRef | null, b: MapObjectRef | null): boolean =>
+export const sameRef = (a: SelectionRef | null, b: SelectionRef | null): boolean =>
   a === b || (a !== null && b !== null && a.kind === b.kind && a.id === b.id);
 
 /**
@@ -65,8 +80,8 @@ interface ViewState {
   leftPanelOpen: boolean;
   rightPanelOpen: boolean;
   leftTab: LeftTab;
-  /** Drives the inspector and the tree highlight (S2-13). */
-  selected: MapObjectRef | null;
+  /** Drives the inspector and the list highlights (S2-13); a fleet too (S6-7). */
+  selected: SelectionRef | null;
   hovered: MapObjectRef | null;
   /** The camera's centre (S2-13, S5b-5). */
   focus: FocusRef;
@@ -86,11 +101,23 @@ interface ViewState {
   preview: Preview | null;
   /** The object flashing on the map, e.g. a ship just spawned (S5b-11). */
   flash: Flash | null;
+  /** Whose events the timeline shows (S6-25). */
+  show: ShowRef;
+  /** Collapsed groups of the Fleets tab: a FleetId, or 'unassigned' (S6-4). */
+  collapsedFleets: Record<string, boolean>;
+  /** The Fleets tab's status filter (S6-4). */
+  fleetsFilter: FleetsFilter;
   toggleLeftPanel(): void;
   toggleRightPanel(): void;
   setLeftTab(tab: LeftTab): void;
-  /** Selects. It never changes the focus, the frame or the active ship (decision 183). */
-  select(ref: MapObjectRef | null): void;
+  /**
+   * Selects. It never changes the focus, the frame or the active ship (decision 183). Selecting a
+   * fleet also shows it on the timeline (S6-7).
+   */
+  select(ref: SelectionRef | null): void;
+  setShow(show: ShowRef): void;
+  toggleFleetCollapsed(id: FleetId | 'unassigned'): void;
+  setFleetsFilter(f: FleetsFilter): void;
   setHovered(ref: MapObjectRef | null): void;
   /** Focuses and selects, and sets the frame (decision 183); a node focuses its ship. */
   focusOn(ref: MapObjectRef): void;
@@ -152,10 +179,22 @@ export const useView = create<ViewState>()((set) => ({
   spawnFormOpen: false,
   preview: null,
   flash: null,
+  show: { kind: 'active' },
+  collapsedFleets: {},
+  fleetsFilter: 'all',
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftTab: (tab) => set({ leftTab: tab }),
-  select: (ref) => set({ selected: ref }),
+  select: (ref) =>
+    set(
+      ref?.kind === 'fleet'
+        ? { selected: ref, show: { kind: 'fleet', id: ref.id } }
+        : { selected: ref },
+    ),
+  setShow: (show) => set({ show }),
+  toggleFleetCollapsed: (id) =>
+    set((s) => ({ collapsedFleets: { ...s.collapsedFleets, [id]: !s.collapsedFleets[id] } })),
+  setFleetsFilter: (fleetsFilter) => set({ fleetsFilter }),
   activate: (id) =>
     set((s) =>
       useWorld.getState().world.ships[id]?.status === 'coasting'

@@ -1,6 +1,6 @@
 import { resolveFrameBody } from '../../render/mapFrame';
 import { viewTime } from '../../render/previewTime';
-import { useView } from '../../store/useView';
+import { mapSelection, useView } from '../../store/useView';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import { Popover } from '../layout/Popover';
 import { frameOptions } from './frameOptions';
@@ -34,7 +34,7 @@ export function FrameMenu() {
     >
       {(close) => (
         <div role="menu" aria-label="Frame" className={styles['menu']}>
-          {frameOptions(world, focus, selected, t).map((id) => (
+          {frameOptions(world, focus, mapSelection(selected), t).map((id) => (
             <button
               key={id}
               type="button"

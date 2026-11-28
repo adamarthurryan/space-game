@@ -8,7 +8,7 @@
 
 import { ACESFilmicToneMapping, Color, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import type { World } from '../sim/world';
-import { FLASH_MS, resolveActiveShip, useView } from '../store/useView';
+import { FLASH_MS, mapSelection, resolveActiveShip, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { CameraStage } from './camera/CameraStage';
 import { FOV_DEG } from './camera/framing';
@@ -166,7 +166,7 @@ export class MapRenderer {
     const left = flash ? flash.until - performance.now() : 0;
     return {
       focus,
-      selected,
+      selected: mapSelection(selected),
       hovered,
       frameBodyId: resolveFrameBody(world, frame, viewTime(world.clock.t, preview)),
       activeShipId: resolveActiveShip(world, activeShipId),

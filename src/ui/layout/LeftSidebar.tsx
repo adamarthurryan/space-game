@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { useView, type LeftTab } from '../../store/useView';
-import { FleetList } from '../panels/FleetList';
+import { FleetsTab } from '../fleet/FleetsTab';
 import { SystemTree } from '../panels/SystemTree';
 import styles from './LeftSidebar.module.css';
 
@@ -59,7 +59,7 @@ export function LeftSidebar() {
         id="left-tabpanel"
         aria-labelledby={`left-tab-${active.id}`}
       >
-        {active.id === 'system' ? <SystemTree /> : <FleetList />}
+        {active.id === 'system' ? <SystemTree /> : <FleetsTab />}
       </div>
     </nav>
   );

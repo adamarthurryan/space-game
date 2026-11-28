@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { warpRate } from '../../sim/clock';
-import { resolveActiveShip, useView } from '../../store/useView';
+import { mapSelection, resolveActiveShip, useView } from '../../store/useView';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import { formatCountdown, formatWarp } from '../format';
 import styles from '../layout/Timeline.module.css';
@@ -19,7 +19,7 @@ export function WarpToButtons() {
   const [error, setError] = useState<{ which: 'event' | 'node'; text: string } | null>(null);
 
   const shipId = resolveActiveShip(world, activeShipId);
-  const nodeTarget = warpNodeTarget(world, activeShipId, selected);
+  const nodeTarget = warpNodeTarget(world, activeShipId, mapSelection(selected));
   const warpTo = world.clock.warpTo;
 
   const nextEvent = () => {

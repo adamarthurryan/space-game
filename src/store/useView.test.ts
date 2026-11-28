@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createSandboxWorld } from '../gen/scenario';
-import { focusRefOf, resolveActiveShip, useView } from './useView';
+import { focusRefOf, mapSelection, resolveActiveShip, shipOf, useView } from './useView';
 import { useWorld } from './useWorld';
 
 const initialView = useView.getState();
@@ -112,5 +112,18 @@ describe('preview (S5-9)', () => {
     expect(useView.getState().preview).toBeNull();
     useView.getState().movePreview(300);
     expect(useView.getState().preview).toBeNull();
+  });
+});
+
+describe('fleet selection (S6-7)', () => {
+  it('selecting a fleet shows it on the timeline; it is not a map object', () => {
+    useView.getState().select({ kind: 'fleet', id: 'fleet-1' });
+    expect(useView.getState().show).toEqual({ kind: 'fleet', id: 'fleet-1' });
+    const sel = useView.getState().selected;
+    expect(mapSelection(sel)).toBeNull();
+    expect(shipOf(sel)).toBeNull();
+    useView.getState().select({ kind: 'ship', id: 'ship-1' });
+    expect(useView.getState().show).toEqual({ kind: 'fleet', id: 'fleet-1' });
+    expect(mapSelection(useView.getState().selected)).toEqual({ kind: 'ship', id: 'ship-1' });
   });
 });

@@ -75,6 +75,21 @@ export function SpawnShipForm() {
   /** A computed state from the "To the Moon" preset, used until a field is edited. */
   const [override, setOverride] = useState<OrbitState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fleets = useWorld((s) => s.world.fleets);
+  useWorld((s) => s.version);
+  /** The selected fleet, or the selected ship's fleet, else Unassigned (S6-4). */
+  const [fleetId, setFleetId] = useState<string>(() => {
+    const sel = useView.getState().selected;
+    const w = useWorld.getState().world;
+    if (sel?.kind === 'fleet') return sel.id;
+    const ship =
+      sel?.kind === 'ship'
+        ? w.ships[sel.id]
+        : sel?.kind === 'node'
+          ? w.ships[sel.shipId]
+          : undefined;
+    return ship?.fleetId ?? '';
+  });
   const parents = useMemo(
     () =>
       bodyOrder(system)
@@ -154,7 +169,12 @@ export function SpawnShipForm() {
       );
     }
     const name = fields.name.trim();
-    const result = world.spawnShip({ designId: fields.designId, orbit, ...(name ? { name } : {}) });
+    const result = world.spawnShip({
+      designId: fields.designId,
+      orbit,
+      ...(name ? { name } : {}),
+      ...(fleetId && fleets[fleetId] ? { fleetId } : {}),
+    });
     if (!result.ok) {
       setError(result.error);
       return;
@@ -213,6 +233,17 @@ export function SpawnShipForm() {
         placeholder="(automatic)"
         onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
       />
+      <label htmlFor="spawn-fleet">Fleet</label>
+      <select id="spawn-fleet" value={fleetId} onChange={(e) => setFleetId(e.target.value)}>
+        <option value="">Unassigned</option>
+        {Object.values(fleets)
+          .sort((a, b) => a.seq - b.seq)
+          .map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+      </select>
       <label htmlFor="spawn-parent">Parent</label>
       <select
         id="spawn-parent"

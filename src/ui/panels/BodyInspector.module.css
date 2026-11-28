@@ -53,3 +53,12 @@
   background: var(--color-panel-raised);
   cursor: pointer;
 }
+
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  text-align: left;
+}
