@@ -26,7 +26,8 @@ type Claim =
  * select, double-click to focus. Where nothing else is under the pointer, the active ship's path
  * shows a ghost node, and a click there creates a node and selects it. A press on a gizmo handle
  * drags it; a press on one of the active ship's nodes drags it along its path (or selects it, if
- * it doesn't move). Those presses are claimed before the camera input sees them
+ * it doesn't move), unless the node is behind a body's disc or its gizmo is hidden at small scale
+ * (S5b-14, S5b-15 in planning/sprint-5b.md), when it can only be clicked. Those presses are claimed before the camera input sees them
  * (`stopImmediatePropagation`; these listeners are attached first). Any other press that moves
  * 4 px or more is a camera drag; a click on empty space changes nothing. Returns a function that
  * detaches the listeners.
@@ -47,6 +48,17 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
   };
   /** Map editing is off in a preview (S5-11): no ghost, no node drags. */
   const previewing = () => useView.getState().preview !== null;
+  /**
+   * Whether a node can be dragged: the active ship's, outside a preview, not behind a body's
+   * disc (S5b-14), and not the selected node while its gizmo is hidden at small scale (S5b-15).
+   */
+  const draggable = (ref: Extract<MapObjectRef, { kind: 'node' }>) => {
+    const view = useView.getState();
+    if (ref.shipId !== view.activeShipId || previewing()) return false;
+    const placed = frame.nodes.find((n) => n.shipId === ref.shipId && n.nodeId === ref.id);
+    if (!placed || placed.occluded) return false;
+    return !(sameRef(view.selected, ref) && gizmo.tooSmall);
+  };
   /** The ghost under the pointer, when nothing else is (S4-12); none in a preview. */
   const updateGhost = (e: MouseEvent, hit: MapObjectRef | null) => {
     const p = local(e);
@@ -94,9 +106,13 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
       el.title = gizmo.tooltip(handle);
       return;
     }
-    el.title = '';
     const hit = at(e);
     const view = useView.getState();
+    // The selected node's gizmo is hidden at small scale (S5b-15): say how to get it back.
+    el.title =
+      hit?.kind === 'node' && sameRef(view.selected, hit) && gizmo.tooSmall
+        ? 'Zoom in to drag the node'
+        : '';
     if (!sameRef(view.hovered, hit)) view.setHovered(hit);
     updateGhost(e, hit);
     el.style.cursor = hit ? 'pointer' : frame.ghost ? 'copy' : '';
@@ -115,8 +131,7 @@ export function attachPointerInput(el: HTMLElement, frame: MapFrame, gizmo: Node
       return;
     }
     const hit = pick(frame, p.x, p.y);
-    const active = useView.getState().activeShipId;
-    if (hit?.kind === 'node' && hit.shipId === active && !previewing()) {
+    if (hit?.kind === 'node' && draggable(hit)) {
       take(e);
       claim = { kind: 'node', id: e.pointerId, x: p.x, y: p.y, moved: false, ref: hit };
       return;

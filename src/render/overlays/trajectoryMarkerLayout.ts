@@ -2,17 +2,19 @@
  * Placing the trajectory markers (decision S3-19 in planning/sprint-3.md): a pooled set of DOM
  * spans, positioned every frame. Glyphs are always shown; texts are placed after the body and
  * ship labels, and hidden where they would overlap a label or an earlier marker text. Markers
- * aren't clickable this sprint, so they aren't added to the picking labels.
+ * aren't clickable this sprint, so they aren't added to the picking labels. A marker behind a
+ * nearer body's disc is dimmed, with no text (S5b-14 in planning/sprint-5b.md).
  */
 
 import { sameRef, type MapObjectRef } from '../../store/useView';
 import type { World } from '../../sim/world';
 import { frameWorldInto, type MapFrame, type Rect } from '../mapFrame';
 import type { ViewSnapshot } from '../stages';
-import { getBody } from '../../sim/body';
+import { bodyStateIn, getBody } from '../../sim/body';
 import { segmentStateAt } from '../../sim/trajectory';
 import { nodeMarkers } from '../nodeMarkers';
-import { projectScenePoint, type ScreenPoint } from '../screenDash';
+import { sceneOccluded } from '../occlusion';
+import type { ScreenPoint } from '../screenDash';
 import { shipColor } from '../shipStyle';
 import { trajectoryMarkers, type TrajectoryMarker } from '../trajectoryMarkers';
 import { LABEL_GAP_PX } from './labelLayout';
@@ -40,6 +42,8 @@ export interface PlacedMarker {
   x: number;
   y: number;
   textShown: boolean;
+  /** Behind a nearer body's disc: drawn at 30%, with no text (S5b-14). */
+  dimmed: boolean;
 }
 
 export interface TrajectoryMarkerRegistry {
@@ -115,7 +119,8 @@ interface Item {
   shipId: string;
   nodeId?: string;
   pos?: { x: number; y: number; z: number };
-  screen?: { x: number; y: number };
+  /** The ghost: its screen point, and its point relative to the frame body for occlusion. */
+  screen?: { x: number; y: number; pos: { x: number; y: number; z: number } };
   text: string;
   /** CSS classes of the glyph, and its colour. */
   glyphClass: string;
@@ -191,10 +196,14 @@ export function placeTrajectoryMarkers(
     if (ship && seg) {
       const r = segmentStateAt(world.system, seg, ghost.t).r;
       const alt = Math.hypot(r.x, r.y, r.z) - getBody(world.system, seg.parentId).radius;
+      const off =
+        seg.parentId === view.frameBodyId
+          ? { x: 0, y: 0, z: 0 }
+          : bodyStateIn(world.system, seg.parentId, view.frameBodyId, ghost.t).r;
       items.push({
         kind: 'ghost',
         shipId: ghost.shipId,
-        screen: { x: ghost.x, y: ghost.y },
+        screen: { x: ghost.x, y: ghost.y, pos: { x: r.x + off.x, y: r.y + off.y, z: r.z + off.z } },
         text: `T+${reg.fmtDuration(ghost.t - frame.t)} · ${reg.fmt(alt)}`,
         color: shipColor(ship.seq),
         glyphClass: cls('glyph', 'node', 'ghost'),
@@ -213,17 +222,14 @@ export function placeTrajectoryMarkers(
   for (const m of items) {
     let x: number;
     let y: number;
+    const p = m.screen ? m.screen.pos : m.pos!;
+    const sx = base.x + p.x - origin.x;
+    const sy = base.y + p.y - origin.y;
+    const sz = base.z + p.z - origin.z;
+    const dimmed = sceneOccluded(frame, sx, sy, sz, sp);
     if (m.screen) {
       ({ x, y } = m.screen);
     } else {
-      const p = m.pos!;
-      projectScenePoint(
-        cam,
-        base.x + p.x - origin.x,
-        base.y + p.y - origin.y,
-        base.z + p.z - origin.z,
-        sp,
-      );
       if (sp.depth <= 1e-3) continue;
       ({ x, y } = sp);
     }
@@ -243,7 +249,7 @@ export function placeTrajectoryMarkers(
       span.height = span.text.offsetHeight;
     }
     let textShown = false;
-    if (m.text) {
+    if (m.text && !dimmed) {
       const rect = {
         x: x + LABEL_GAP_PX + 4,
         y: y - span.height / 2,
@@ -256,11 +262,20 @@ export function placeTrajectoryMarkers(
     }
     span.root.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     span.root.style.visibility = 'visible';
+    span.root.classList.toggle(styles['dimmed'] ?? 'dimmed', dimmed);
     span.text.style.visibility = textShown ? 'inherit' : 'hidden';
-    const placed: PlacedMarker = { shipId: m.shipId, kind: m.kind, text: m.text, x, y, textShown };
+    const placed: PlacedMarker = {
+      shipId: m.shipId,
+      kind: m.kind,
+      text: m.text,
+      x,
+      y,
+      textShown,
+      dimmed,
+    };
     if (m.nodeId !== undefined) {
       placed.nodeId = m.nodeId;
-      frame.nodes.push({ shipId: m.shipId, nodeId: m.nodeId, x, y });
+      frame.nodes.push({ shipId: m.shipId, nodeId: m.nodeId, x, y, occluded: dimmed });
     }
     reg.placed.push(placed);
   }

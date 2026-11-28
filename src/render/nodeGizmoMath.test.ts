@@ -2,16 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { vec3 } from '../math/vec3';
 import { localOrbitalBasis } from '../orbital/frames';
 import type { FrameCamera } from './mapFrame';
+import { MU_PLANET, syntheticSystem } from '../sim/testSystem';
+import type { Segment } from '../sim/trajectory';
 import {
+  conicScreenSize,
   dragDelta,
   dragModeOf,
   GIZMO_ARM_PX,
+  GIZMO_MIN_CONIC_PX,
   gizmoScale,
   handleDirection,
   handleEdit,
   screenAxis,
 } from './nodeGizmoMath';
 import { projectScenePoint } from './screenDash';
+import { conicGeometry } from './trajectoryGeometry';
+
+const sys = syntheticSystem(0.3);
 
 const cam: FrameCamera = {
   position: vec3(0, 0, 10),
@@ -89,5 +96,45 @@ describe('screenAxis', () => {
   it('is null for an axis pointing at the camera, or a node behind it', () => {
     expect(screenAxis(cam, vec3(0, 0, 0), vec3(0, 0, 1))).toBeNull();
     expect(screenAxis(cam, vec3(0, 0, 20), vec3(1, 0, 0))).toBeNull();
+  });
+});
+
+describe('conicScreenSize (S5b-15)', () => {
+  // Looking straight down at the XY plane from 3e4 km: 600 px span 2·3e4·tan 30° km.
+  const far: FrameCamera = { ...cam, position: vec3(0, 0, 3e4) };
+  const kmPerPx = (2 * 3e4 * Math.tan(Math.PI / 6)) / 600;
+  const id = (p: { x: number; y: number; z: number }) => p;
+  const seg = (v: number): Segment => ({
+    kind: 'conic',
+    parentId: 'planet',
+    r0: vec3(7000, 0, 0),
+    v0: vec3(0, v, 0),
+    tStart: 0,
+    tEnd: 3e4,
+    endEvent: 'horizon',
+  });
+
+  it("is an ellipse's projected major axis, seen face on", () => {
+    // Circular at 7000 km: 14,000 km across.
+    const g = conicGeometry(sys, seg(Math.sqrt(MU_PLANET / 7000)));
+    const px = conicScreenSize(far, g, 0, 1, id);
+    expect(px).toBeCloseTo(14_000 / kmPerPx, 0);
+    expect(px).toBeGreaterThan(GIZMO_MIN_CONIC_PX);
+  });
+
+  it('keeps the minor axis when the major axis points at the camera', () => {
+    const g = conicGeometry(sys, seg(Math.sqrt(MU_PLANET / 7000) * 1.2));
+    // Rotate the plane so the major axis (along x) points down the view axis.
+    const edge = (p: { x: number; y: number; z: number }) => vec3(0, p.y, p.x);
+    expect(conicScreenSize(far, g, 0, 1, edge)).toBeGreaterThan(0);
+  });
+
+  it("is an open conic's drawn piece's extent, and Infinity behind the camera", () => {
+    const g = conicGeometry(sys, seg(Math.sqrt((2.5 * MU_PLANET) / 7000)));
+    const px = conicScreenSize(far, g, 0, 3e4, id);
+    expect(px).toBeGreaterThan(0);
+    expect(px).toBeLessThan(conicScreenSize(far, g, 0, 6e4, id));
+    const near: FrameCamera = { ...cam, position: vec3(0, 0, 10) };
+    expect(conicScreenSize(near, g, 0, 3e4, (p) => vec3(p.x, p.y, p.z + 20))).toBe(Infinity);
   });
 });

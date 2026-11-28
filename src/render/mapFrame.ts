@@ -88,6 +88,8 @@ export interface PlacedNode {
   nodeId: NodeId;
   x: number;
   y: number;
+  /** Behind a nearer body's disc: it can be selected, not dragged (S5b-14). */
+  occluded: boolean;
 }
 
 /** The ghost node: where a click on the active ship's path would create a node (S4-12). */

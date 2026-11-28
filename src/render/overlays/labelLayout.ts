@@ -10,6 +10,7 @@ import type { World } from '../../sim/world';
 import type { MapObjectRef } from '../../store/useView';
 import { bodyStyle } from '../bodyStyle';
 import type { MapFrame } from '../mapFrame';
+import { occludedAt } from '../occlusion';
 import { SHIP_MARKER_PX } from '../shipStyle';
 import { declutter, labelPriority, shipLabelPriority, type LabelCandidate } from './declutter';
 
@@ -59,15 +60,6 @@ export function createLabelRegistry(frame: MapFrame): LabelRegistry {
 /** Whether body i's centre is behind a nearer body's drawn disc. */
 function occluded(frame: MapFrame, i: number): boolean {
   return occludedAt(frame, frame.screenX[i]!, frame.screenY[i]!, frame.depth[i]!, i);
-}
-
-/** Whether a point is behind a nearer drawn disc (other than body `self`). */
-function occludedAt(frame: MapFrame, x: number, y: number, depth: number, self = -1): boolean {
-  for (let j = 0; j < frame.order.length; j++) {
-    if (j === self || !frame.sphereShown[j] || !(frame.depth[j]! < depth)) continue;
-    if (Math.hypot(x - frame.screenX[j]!, y - frame.screenY[j]!) < frame.discPx[j]!) return true;
-  }
-  return false;
 }
 
 /** Fills `reg.candidates` from the frame's projection and the measured label sizes. */

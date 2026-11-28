@@ -66,3 +66,8 @@
 .ghost {
   opacity: 0.85;
 }
+
+/* Behind a nearer body's disc (S5b-14): faint, and its text hidden. */
+.dimmed {
+  opacity: 0.3;
+}

@@ -3,13 +3,18 @@
  * axes, the drag sensitivity, the screen-constant size and the screen axis of a handle.
  */
 
-import type { Vec3 } from '../math/vec3';
+import { vec3, type Vec3 } from '../math/vec3';
 import type { LocalDv, OrbitalBasis } from '../orbital/frames';
 import type { FrameCamera } from './mapFrame';
 import { projectScenePoint, type ScreenPoint } from './screenDash';
+import { anomalyAt, positionAtAnomaly, type ConicGeometry } from './trajectoryGeometry';
 
 /** Arm length on screen, px. */
 export const GIZMO_ARM_PX = 60;
+/** The gizmo is shown only while the node's conic is at least this wide on screen (S5b-15). */
+export const GIZMO_MIN_CONIC_PX = 150;
+/** Points sampled along an open conic's drawn piece to measure it. */
+const OPEN_SAMPLES = 32;
 /** The Δv change of a 100 px drag, km/s; the curve is cubic (S4-14). */
 export const DRAG_SCALE = 0.1;
 const DRAG_UNIT_PX = 100;
@@ -100,4 +105,51 @@ export function screenAxis(
   // Under 0.3 px for a 6 px step: the axis is within ~3° of the view direction.
   if (len < 0.3) return null;
   return { x: dx / len, y: dy / len };
+}
+
+const p0: ScreenPoint = { x: 0, y: 0, depth: 0 };
+const p1: ScreenPoint = { x: 0, y: 0, depth: 0 };
+const pos = vec3(0, 0, 0);
+
+/**
+ * How wide the conic a node sits on is on screen, px (S5b-15 in planning/sprint-5b.md): for an
+ * ellipse, the larger of its projected major and minor axes (the major axis alone vanishes when
+ * it points at the camera); for an open conic, the larger side of the screen box of its piece
+ * from `from` to `to`. `toScene` maps a point relative to the conic's parent into the scene.
+ * Infinity if any point measured is behind the camera: the view is inside the conic.
+ */
+export function conicScreenSize(
+  cam: FrameCamera,
+  g: ConicGeometry,
+  from: number,
+  to: number,
+  toScene: (p: Vec3) => Vec3,
+): number {
+  const project = (x: number, out: ScreenPoint): boolean => {
+    const s = toScene(positionAtAnomaly(g, x, pos));
+    projectScenePoint(cam, s.x, s.y, s.z, out);
+    return out.depth > 0;
+  };
+  if (g.kind === 'elliptic') {
+    let size = 0;
+    for (const x of [0, Math.PI / 2]) {
+      if (!project(x, p0) || !project(x + Math.PI, p1)) return Infinity;
+      size = Math.max(size, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+    }
+    return size;
+  }
+  const x0 = anomalyAt(g, from);
+  const x1 = anomalyAt(g, to);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let k = 0; k <= OPEN_SAMPLES; k++) {
+    if (!project(x0 + ((x1 - x0) * k) / OPEN_SAMPLES, p0)) return Infinity;
+    minX = Math.min(minX, p0.x);
+    maxX = Math.max(maxX, p0.x);
+    minY = Math.min(minY, p0.y);
+    maxY = Math.max(maxY, p0.y);
+  }
+  return Math.max(maxX - minX, maxY - minY);
 }
