@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { registry } from '../content/registry';
+import { addAlarm, alarmSchedule } from './alarms';
 import {
   assignShip,
   checkFleetName,

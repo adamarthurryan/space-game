@@ -11,7 +11,6 @@ export { formatCountdown, formatDate };
 const SUPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹';
 const MINUS = '−';
 
-
 /** A warp rate as a power of ten: `×1`, `×10`, `×10⁶`. Other rates are shown in full. */
 export function formatWarp(rate: number): string {
   const exp = Math.log10(rate);
@@ -95,4 +94,3 @@ export function formatScientific(x: number, unit: string): string {
 export function formatMass(kg: number): string {
   return formatScientific(kg, 'kg');
 }
-

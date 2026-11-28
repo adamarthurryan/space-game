@@ -28,8 +28,7 @@ export function createPQueue<T>(): PQueue<T> {
 
 function less<T>(x: PQEntry<T>, y: PQEntry<T>): boolean {
   return (
-    x.key < y.key ||
-    (x.key === y.key && (x.rank < y.rank || (x.rank === y.rank && x.seq < y.seq)))
+    x.key < y.key || (x.key === y.key && (x.rank < y.rank || (x.rank === y.rank && x.seq < y.seq)))
   );
 }
 
