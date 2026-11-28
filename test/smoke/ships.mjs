@@ -178,6 +178,12 @@ async function run(page, check) {
     `4. Suborbital: the trajectory ends with an impact (${subTr.segments.map((s) => s.endEvent).join(', ')})`,
   );
   const impactT = subTr.segments.at(-1)?.tEnd ?? 0;
+  // The default impact alarm (sprint 6) would pause an hour before the impact: turn it off here.
+  await page.evaluate(() => {
+    const w = window.__spaceGame.world.getState();
+    for (const a of Object.values(w.world.alarms))
+      if (a.isDefault) w.editAlarm(a.id, { enabled: false });
+  });
   await keys(page, 'Space');
   await setWarp(page, 3);
   await until(async () => (await probe(page, 'simTime')) > impactT + 10, 10_000);
