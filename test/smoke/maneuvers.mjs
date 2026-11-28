@@ -107,12 +107,13 @@ async function run(page, check) {
   await keys(page, 'Space'); // pause: planning happens at a fixed time
   await page.getByRole('tab', { name: 'Fleets' }).click();
 
-  // 1. Spawn LEO (lunar plane): it becomes the active ship.
+  // 1. Spawn LEO (lunar plane), and fly it (A, S5b-6): it becomes the active ship.
   await page.getByRole('button', { name: 'Spawn ship…' }).click();
   await page.getByLabel('Preset').selectOption('leo-lunar-plane');
   await page.getByRole('button', { name: 'Spawn', exact: true }).click();
   const sel = await page.evaluate(() => window.__spaceGame.view.getState().selected);
   const id = sel?.id;
+  await keys(page, 'KeyA');
   const spawnT = (await segments(page, id))[0].tStart;
   check((await probe(page, 'activeShip')) === id, `1. the spawned ship ${id} is active`);
   const star = await page.getByRole('option', { name: /Starship 4/ }).textContent();
@@ -124,20 +125,30 @@ async function run(page, check) {
   await sleep(1600);
   await keys(page, 'KeyP');
   await sleep(1200);
-  await wheel(page, canvas, 2);
+  // The ship was on screen, so focusing it kept Earth's framing (S5b-5): zoom in to the low orbit.
+  await wheel(page, canvas, -6);
 
   // 2. The ghost on the path, and click to create.
   const path = await probe(page, 'activePath');
+  // The low orbit, seen from above, runs just outside Earth's disc.
+  const earth = await probe(page, 'body', 'earth');
+  const offEarth = (p) => Math.hypot(p.x - earth.x, p.y - earth.y) - earth.disc;
   const pts = path[0].points.filter(
     (p) =>
       Number.isFinite(p.x) &&
       p.x > 40 &&
       p.y > 40 &&
       p.x < canvas.width - 40 &&
-      p.y < canvas.height - 40,
+      p.y < canvas.height - 40 &&
+      offEarth(p) > 0,
   );
   const pt = pts[Math.floor(pts.length / 4)];
-  await page.mouse.move(canvas.x + pt.x + 2, canvas.y + pt.y + 2);
+  // 2 px off the path, away from Earth's disc.
+  const away = Math.hypot(pt.x - earth.x, pt.y - earth.y);
+  await page.mouse.move(
+    canvas.x + pt.x + (2 * (pt.x - earth.x)) / away,
+    canvas.y + pt.y + (2 * (pt.y - earth.y)) / away,
+  );
   await sleep(150);
   const ghost = await probe(page, 'ghost');
   check(
@@ -203,11 +214,8 @@ async function run(page, check) {
   await page.screenshot({ path: resolve(outDir, 'maneuvers-tli.png') });
 
   // 5. Chain: Add node ▾ → at next Pe, then a circularising retrograde Δv.
-  await page
-    .getByRole('link', { name: /Starship 4/ })
-    .or(page.getByRole('button', { name: /← Starship 4/ }))
-    .first()
-    .click();
+  // The node's row is expanded in the ship inspector (S5b-17); its header collapses it.
+  await page.getByRole('button', { name: /^◆ Node/, expanded: true }).click();
   await page.getByRole('button', { name: 'Add node ▾' }).click();
   await page.getByRole('menuitem', { name: 'At next Pe' }).click();
   await sleep(200);
@@ -292,7 +300,7 @@ async function run(page, check) {
   await page.getByPlaceholder('1h 30m').fill('1h');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await type(page, 'Prograde', '20 km/s');
-  await page.getByRole('button', { name: /← Starship 4/ }).click();
+  await page.getByRole('button', { name: /^◆ Node/, expanded: true }).click();
   const left = page.getByLabel('Δv left after plan');
   const leftText = await left.textContent();
   const leftClass = await left.getAttribute('class');

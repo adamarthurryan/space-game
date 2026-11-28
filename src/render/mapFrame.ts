@@ -10,7 +10,8 @@ import { bodyOrder, bodyWorldPositionsInto, type BodyId, type BodySystem } from 
 import type { ShipId } from '../sim/ship';
 import { shipBodyAt, shipPointAt, type World } from '../sim/world';
 import type { NodeId } from '../sim/maneuver';
-import type { FocusRef } from '../store/useView';
+import type { FocusRef, FrameRef } from '../store/useView';
+import type { EncounterGhost } from './encounterGhosts';
 import type { ProjectedPolyline } from './pathPicking';
 
 /** The camera of this frame, relative to the origin: position and orthonormal basis. */
@@ -36,10 +37,16 @@ export interface Rect {
   h: number;
 }
 
-/** A label placed by the declutter pass (step 6), kept for picking. */
+/**
+ * A label placed by the declutter pass (step 6), kept for picking. A merged label (S5b-16) is
+ * one PlacedLabel per name, each its own pick target; the body's part lists every name's ref in
+ * `parts`.
+ */
 export interface PlacedLabel {
   ref: FocusRef;
   rect: Rect;
+  /** On the first part of a merged label: the refs of all its names, in order (S5b-16). */
+  parts?: FocusRef[];
 }
 
 export interface MapFrame {
@@ -80,6 +87,8 @@ export interface MapFrame {
   nodes: PlacedNode[];
   /** The ghost node under the pointer, if any (pointer input, S4-12). */
   ghost: Ghost | null;
+  /** The bodies at their SOI entries this frame (layers stage, S5b-13). */
+  encounters: EncounterGhost[];
 }
 
 /** A node glyph on screen. */
@@ -88,6 +97,8 @@ export interface PlacedNode {
   nodeId: NodeId;
   x: number;
   y: number;
+  /** Behind a nearer body's disc: it can be selected, not dragged (S5b-14). */
+  occluded: boolean;
 }
 
 /** The ghost node: where a click on the active ship's path would create a node (S4-12). */
@@ -164,6 +175,7 @@ export function createMapFrame(system: BodySystem): MapFrame {
     paths: [],
     nodes: [],
     ghost: null,
+    encounters: [],
   };
 }
 
@@ -247,9 +259,19 @@ export function mapObjectWorldInto(frame: MapFrame, world: World, ref: FocusRef,
 }
 
 /**
- * The body trajectories are drawn relative to: the focus, or a focused ship's parent at t
- * (S3-16, S5-10). A ship not drawn at t gives the body it hit, or its current parent.
+ * The body a focus is framed around (the camera's rule): the focus, or a focused ship's parent at
+ * t (S3-16, S5-10). A ship not drawn at t gives the body it hit, or its current parent.
  */
 export function frameBodyOf(world: World, focus: FocusRef, t: number): BodyId {
   return focus.kind === 'body' ? focus.id : shipBodyAt(world, focus.id, t);
+}
+
+/**
+ * The body trajectories are drawn relative to at time t (S5b-1, S5b-3): a fixed body, or a
+ * followed ship's parent at t. A followed ship that was destroyed resolves to the body it hit
+ * (shipBodyAt).
+ */
+export function resolveFrameBody(world: World, frame: FrameRef, t: number): BodyId {
+  if (frame.kind === 'ship-parent') return shipBodyAt(world, frame.shipId, t);
+  return world.system.bodies[frame.id] ? frame.id : world.system.rootId;
 }

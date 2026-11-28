@@ -44,12 +44,14 @@ export interface ViewSnapshot {
   focus: FocusRef;
   selected: MapObjectRef | null;
   hovered: MapObjectRef | null;
-  /** The body whose frame trajectories are drawn in (S3-16). */
+  /** The body trajectories are drawn relative to: the resolved reference frame (S5b-1). */
   frameBodyId: BodyId;
   /** The active ship, if it is coasting (S4-9). */
   activeShipId: ShipId | null;
   /** Whether the map is drawn at a preview time, not now: map editing is off (S5-11). */
   previewing: boolean;
+  /** The object flashing, and the wall seconds since the flash began (S5b-11); null if none. */
+  flash: { ref: MapObjectRef; elapsed: number } | null;
 }
 
 /** One kind of object on the map, as a plain three.js layer. */
@@ -106,6 +108,6 @@ export function labelsStage(
   measureLabels(reg);
   updateLabelCandidates(reg, frame, world.system, view);
   updateShipLabelCandidates(reg, frame, world, view);
-  placeLabels(reg, frame);
+  placeLabels(reg, frame, world, view);
   placeTrajectoryMarkers(markers, frame, world, view);
 }

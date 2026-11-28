@@ -24,7 +24,10 @@ function setUp(dv: number = SMOKE_TLI.dv): { shipId: string; nodeId: string } {
     dv: { prograde: dv, normal: 0, radial: 0 },
   });
   if (!n.ok) throw new Error(n.error);
-  act(() => useView.getState().select({ kind: 'node', shipId: r.value, id: n.value }));
+  act(() => {
+    useView.getState().activate(r.value);
+    useView.getState().select({ kind: 'node', shipId: r.value, id: n.value });
+  });
   return { shipId: r.value, nodeId: n.value };
 }
 
@@ -33,6 +36,35 @@ const type = (label: string, text: string) => {
   fireEvent.change(field(label), { target: { value: text } });
   fireEvent.keyDown(field(label), { key: 'Enter' });
 };
+
+describe('NodeEditor inline in the ship inspector (S5b-17)', () => {
+  it("expands the node's row, with the plan totals and the ship's sections still shown", () => {
+    const { shipId } = setUp();
+    render(<Inspector />);
+    const row = screen.getByRole('button', { name: /^◆ Node 1/ });
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(row.closest('li')!.querySelector('[aria-label="Node editor"]')).not.toBeNull();
+    expect(screen.getByLabelText('Δv left after plan')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Starship 4' })).toBeTruthy();
+    // Its header selects the ship, which collapses it.
+    fireEvent.click(row);
+    expect(useView.getState().selected).toEqual({ kind: 'ship', id: shipId });
+    expect(screen.queryByRole('region', { name: 'Node editor' })).toBeNull();
+  });
+
+  it("shows a non-active ship's plan read-only (S5b-8)", () => {
+    setUp();
+    act(() => useView.getState().activate('ship-1'));
+    render(<Inspector />);
+    expect(screen.getByRole('note').textContent).toBe('Read-only: fly this ship to edit (A)');
+    for (const label of ['Time', 'From now', 'Prograde', 'Normal', 'Radial (out)', 'Enabled']) {
+      expect(field(label).disabled).toBe(true);
+    }
+    for (const name of ['Snap to Pe', 'Snap to Ap', 'Delete', 'Warp to node', 'Add node ▾']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+});
 
 describe('NodeEditor', () => {
   it('shows a TLI’s Δv, burn duration and Moon encounter', () => {
@@ -53,6 +85,10 @@ describe('NodeEditor', () => {
     expect(useWorld.getState().world.ships[shipId]!.plan[0]!.dv.prograde).toBeCloseTo(0.1, 12);
     expect(screen.getByLabelText('Result').textContent).toMatch(/^Earth orbit/);
     type('Normal', '-0.2 km/s');
+    // A shown value is accepted back as typed (decision 182).
+    type('Prograde', '3130.5 m/s');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(useWorld.getState().world.ships[shipId]!.plan[0]!.dv.prograde).toBeCloseTo(3.1305, 12);
     expect(useWorld.getState().world.ships[shipId]!.plan[0]!.dv.normal).toBeCloseTo(-0.2, 12);
   });
 
@@ -69,7 +105,7 @@ describe('NodeEditor', () => {
   it('shows an over-budget node in red', () => {
     setUp(9);
     render(<Inspector />);
-    expect(screen.getByText(/^Over budget: \d\.\d\d km\/s of 9\.00 km\/s$/)).toBeTruthy();
+    expect(screen.getByText(/^Over budget: \d{4}\.\d m\/s of 9000\.0 m\/s$/)).toBeTruthy();
   });
 
   it('disables, snaps and deletes', () => {
@@ -85,11 +121,24 @@ describe('NodeEditor', () => {
     expect(nodeId).toBe('node-1');
   });
 
+  it('disables Snap on a circular orbit (S5b-20)', () => {
+    setUp();
+    render(<Inspector />);
+    for (const name of ['Snap to Pe', 'Snap to Ap']) {
+      const b = screen.getByRole('button', { name }) as HTMLButtonElement;
+      expect(b.disabled).toBe(true);
+      expect(b.title).toBe('Circular orbit');
+    }
+  });
+
   it('snaps to apoapsis on an elliptic orbit', () => {
     // Tern (ship-2) is elliptic.
     const n = useWorld.getState().addNode('ship-2', { t: 1000 });
     if (!n.ok) throw new Error(n.error);
-    act(() => useView.getState().select({ kind: 'node', shipId: 'ship-2', id: n.value }));
+    act(() => {
+      useView.getState().activate('ship-2');
+      useView.getState().select({ kind: 'node', shipId: 'ship-2', id: n.value });
+    });
     render(<Inspector />);
     fireEvent.click(screen.getByRole('button', { name: 'Snap to Ap' }));
     expect(useWorld.getState().world.ships['ship-2']!.plan[0]!.t).not.toBe(1000);

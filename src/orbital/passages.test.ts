@@ -4,7 +4,7 @@ import { norm, vec3 } from '../math/vec3';
 import { period, stateFromElements, type ConicElements } from './elements';
 import { eclipticToPlane, planePole } from './frames';
 import { meanFromTrue } from './kepler';
-import { nearestPassage, timeToPassage } from './passages';
+import { APSIDES_MIN_E, hasApsides, nearestPassage, timeToPassage } from './passages';
 import { propagate } from './propagate';
 
 const MU = 398_600.435;
@@ -91,5 +91,27 @@ describe('nearestPassage', () => {
     const after = stateFromElements(MU, { p: 14000, e: 1.5, i: 0.1, lan: 0, argp: 0, nu: 1 });
     expect(nearestPassage(MU, after, 'periapsis')!).toBeLessThan(0);
     expect(nearestPassage(MU, after, 'apoapsis')).toBeNull();
+  });
+});
+
+describe('hasApsides (S5b-20)', () => {
+  it('is false below e = 1e-4, and for Ap on an open orbit', () => {
+    expect(APSIDES_MIN_E).toBe(1e-4);
+    expect(hasApsides(0, 'periapsis')).toBe(false);
+    expect(hasApsides(0.99e-4, 'apoapsis')).toBe(false);
+    expect(hasApsides(1e-4, 'periapsis')).toBe(true);
+    expect(hasApsides(1e-4, 'apoapsis')).toBe(true);
+    expect(hasApsides(0.5, 'apoapsis')).toBe(true);
+    expect(hasApsides(1.5, 'periapsis')).toBe(true);
+    expect(hasApsides(1.5, 'apoapsis')).toBe(false);
+  });
+
+  it('the passage search finds no apsis on a nearly circular orbit', () => {
+    const s = stateFromElements(MU, { ...ellipse, e: 0.5e-4 });
+    expect(timeToPassage(MU, s, 'periapsis', Z)).toBeNull();
+    expect(timeToPassage(MU, s, 'apoapsis', Z)).toBeNull();
+    expect(nearestPassage(MU, s, 'apoapsis')).toBeNull();
+    const s2 = stateFromElements(MU, { ...ellipse, e: 2e-4 });
+    expect(timeToPassage(MU, s2, 'apoapsis', Z)).not.toBeNull();
   });
 });

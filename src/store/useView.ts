@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { BodyId } from '../sim/body';
 import type { NodeId } from '../sim/maneuver';
 import type { ShipId } from '../sim/ship';
+import { shipBodyAt } from '../sim/world';
+import { useWorld } from './useWorld';
 
 /** Something the camera can focus (S3-15): a body or a ship. */
 export type FocusRef = { kind: 'body'; id: BodyId } | { kind: 'ship'; id: ShipId };
@@ -12,8 +14,8 @@ export type MapObjectRef = FocusRef | { kind: 'node'; shipId: ShipId; id: NodeId
 export const focusRefOf = (ref: MapObjectRef): FocusRef =>
   ref.kind === 'node' ? { kind: 'ship', id: ref.shipId } : ref;
 
-/** The ship a ref makes active, if any (S4-9). */
-const shipOf = (ref: MapObjectRef | null): ShipId | null =>
+/** The ship a ref names: a ship, or a node's ship. */
+export const shipOf = (ref: MapObjectRef | null): ShipId | null =>
   ref?.kind === 'ship' ? ref.id : ref?.kind === 'node' ? ref.shipId : null;
 
 /** The active ship, if it still exists and isn't destroyed (S4-9). */
@@ -28,6 +30,12 @@ export function resolveActiveShip(
 export const sameRef = (a: MapObjectRef | null, b: MapObjectRef | null): boolean =>
   a === b || (a !== null && b !== null && a.kind === b.kind && a.id === b.id);
 
+/**
+ * The reference frame (S5b-1 to S5b-3 in planning/sprint-5b.md): the body ship trajectories are
+ * drawn relative to. A fixed body, or the active ship's parent, followed as it changes SOI.
+ */
+export type FrameRef = { kind: 'body'; id: BodyId } | { kind: 'ship-parent'; shipId: ShipId };
+
 /** Planes the camera can snap to (S2-12). */
 export type SnapPlane = 'ecliptic' | 'selected-orbit';
 
@@ -41,8 +49,17 @@ export interface Preview {
   sticky: boolean;
 }
 
+/** How long a flash lasts, wall ms (S5b-11). */
+export const FLASH_MS = 2000;
+
+/** An object that flashes on the map until `until` (performance.now() ms, S5b-11). */
+export interface Flash {
+  ref: MapObjectRef;
+  until: number;
+}
+
 /** Tabs of the left sidebar. */
-export type LeftTab = 'system' | 'fleets' | 'stations' | 'routes';
+export type LeftTab = 'system' | 'fleets';
 
 interface ViewState {
   leftPanelOpen: boolean;
@@ -51,9 +68,11 @@ interface ViewState {
   /** Drives the inspector and the tree highlight (S2-13). */
   selected: MapObjectRef | null;
   hovered: MapObjectRef | null;
-  /** Drives the camera (S2-13). */
+  /** The camera's centre (S2-13, S5b-5). */
   focus: FocusRef;
-  /** The ship whose plan can be edited: the last selected ship (S4-9). */
+  /** The body trajectories are drawn relative to (S5b-1); set by focusing and activating (decision 183). */
+  frame: FrameRef;
+  /** The ship flown: map editing, the strip, warp-to. Set only by `activate` (S5b-6). */
   activeShipId: ShipId | null;
   /** Bumped by every focusOn, so refocusing the same body re-frames it. */
   focusSeq: number;
@@ -65,14 +84,22 @@ interface ViewState {
   spawnFormOpen: boolean;
   /** The preview, or null when the map shows now (S5-9). */
   preview: Preview | null;
+  /** The object flashing on the map, e.g. a ship just spawned (S5b-11). */
+  flash: Flash | null;
   toggleLeftPanel(): void;
   toggleRightPanel(): void;
   setLeftTab(tab: LeftTab): void;
+  /** Selects. It never changes the focus, the frame or the active ship (decision 183). */
   select(ref: MapObjectRef | null): void;
   setHovered(ref: MapObjectRef | null): void;
-  /** Focuses and selects; a node focuses its ship and selects the node. */
+  /** Focuses and selects, and sets the frame (decision 183); a node focuses its ship. */
   focusOn(ref: MapObjectRef): void;
-  setActiveShip(id: ShipId | null): void;
+  /** Makes a coasting ship active, and the frame follows it (S5b-3, S5b-6). */
+  activate(id: ShipId): void;
+  /** A fixed body frame (Frame ▾, S5b-4): stops following. */
+  setFrame(id: BodyId): void;
+  /** Flashes an object for FLASH_MS of wall time (S5b-11). */
+  flashObject(ref: MapObjectRef): void;
   snapTo(plane: SnapPlane): void;
   toggleExpanded(id: BodyId): void;
   setSpawnFormOpen(open: boolean): void;
@@ -85,8 +112,29 @@ interface ViewState {
   expand(ids: readonly BodyId[]): void;
 }
 
+/** The time the view is drawn at: the preview time, or now. */
+function viewTimeOf(preview: Preview | null): number {
+  return preview?.t ?? useWorld.getState().world.clock.t;
+}
+
 /**
- * View state: panels, selection, hover, focus and snap requests. The camera's animated state
+ * The frame a focus sets (decision 183, revising S5b-2): a body is itself; the active ship (or
+ * its node) is followed; any other ship (or its node) gives its parent at the view time, as a
+ * fixed body.
+ */
+function frameForFocus(
+  ref: MapObjectRef,
+  activeShipId: ShipId | null,
+  preview: Preview | null,
+): FrameRef {
+  if (ref.kind === 'body') return { kind: 'body', id: ref.id };
+  const shipId = ref.kind === 'ship' ? ref.id : ref.shipId;
+  if (shipId === activeShipId) return { kind: 'ship-parent', shipId };
+  return { kind: 'body', id: shipBodyAt(useWorld.getState().world, shipId, viewTimeOf(preview)) };
+}
+
+/**
+ * View state: panels, selection, hover, focus, frame, the active ship and snap requests. The camera's animated state
  * is not here: it lives in the camera controller, which reacts to the requests (S2-17).
  */
 export const useView = create<ViewState>()((set) => ({
@@ -96,23 +144,32 @@ export const useView = create<ViewState>()((set) => ({
   selected: null,
   hovered: null,
   focus: { kind: 'body', id: 'earth' },
+  frame: { kind: 'body', id: 'earth' },
   activeShipId: null,
   focusSeq: 0,
   snapRequest: null,
   expanded: { sun: true },
   spawnFormOpen: false,
   preview: null,
+  flash: null,
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftTab: (tab) => set({ leftTab: tab }),
-  select: (ref) => set((s) => ({ selected: ref, activeShipId: shipOf(ref) ?? s.activeShipId })),
-  setActiveShip: (id) => set({ activeShipId: id }),
+  select: (ref) => set({ selected: ref }),
+  activate: (id) =>
+    set((s) =>
+      useWorld.getState().world.ships[id]?.status === 'coasting'
+        ? { activeShipId: id, frame: { kind: 'ship-parent', shipId: id } }
+        : s,
+    ),
+  setFrame: (id) => set({ frame: { kind: 'body', id } }),
+  flashObject: (ref) => set({ flash: { ref, until: performance.now() + FLASH_MS } }),
   setHovered: (ref) => set({ hovered: ref }),
   focusOn: (ref) =>
     set((s) => ({
       focus: focusRefOf(ref),
       selected: ref,
-      activeShipId: shipOf(ref) ?? s.activeShipId,
+      frame: frameForFocus(ref, s.activeShipId, s.preview),
       focusSeq: s.focusSeq + 1,
     })),
   snapTo: (plane) => set((s) => ({ snapRequest: { plane, seq: (s.snapRequest?.seq ?? 0) + 1 } })),

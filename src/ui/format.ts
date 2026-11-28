@@ -33,9 +33,13 @@ export function formatWarp(rate: number): string {
 const AU_KM = 149_597_870.7;
 const DAY = 86_400;
 const YEAR = 365.25 * DAY;
-const THOUSANDS = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+/** No digit grouping anywhere: a shown value must read back as typed input (decision 182). */
+const THOUSANDS = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 0,
+  useGrouping: false,
+});
 
-/** `6,771 km` below 1e7 km (one decimal under 100 km), `1.524 AU` above. */
+/** `6771 km` below 1e7 km (one decimal under 100 km), `1.524 AU` above. */
 export function formatDistance(km: number): string {
   if (!Number.isFinite(km)) return '∞';
   if (Math.abs(km) >= 1e7) return `${(km / AU_KM).toFixed(3)} AU`;
@@ -47,6 +51,22 @@ export function formatDistance(km: number): string {
 export function formatSpeed(kmps: number): string {
   if (Math.abs(kmps) < 1) return `${THOUSANDS.format(kmps * 1000)} m/s`;
   return `${kmps.toFixed(2)} km/s`;
+}
+
+const DV = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+  useGrouping: false,
+});
+
+/**
+ * Plan Δv (S5b-18 in planning/sprint-5b.md): m/s with one decimal and no digit grouping
+ * (decision 182), `3131.0 m/s`, `0.4 m/s`, `−12.0 m/s`. A ship's own Δv and orbital speeds use formatSpeed.
+ */
+export function formatDv(kmps: number): string {
+  const text = DV.format(Math.abs(kmps * 1000));
+  const negative = kmps < 0 && text !== '0.0';
+  return `${negative ? MINUS : ''}${text} m/s`;
 }
 
 /** `42.0 s`, `12 min 5 s`, `23 h 56 min`, `27 d 7 h`, `1.881 yr`. */

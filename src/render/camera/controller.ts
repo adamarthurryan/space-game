@@ -77,16 +77,22 @@ export function poleBasis(pole: Vec3): { u: Vec3; v: Vec3; w: Vec3 } {
   return { u, v: cross(w, u), w };
 }
 
+/** The start view (S5b-10): looking straight down on the ecliptic. */
+export const START_PITCH = HALF_PI;
+
+/**
+ * A controller about the ecliptic pole, at `framing` from the focus, at `pitch` above the
+ * ecliptic (by default 30°, an oblique look).
+ */
 export function createController(
   focus: FocusRef,
   framing: number,
   minDist: number,
+  pitch = Math.PI / 6,
 ): CameraController {
   const limits = { minLogDistance: Math.log10(minDist), maxLogDistance: Math.log10(MAX_DISTANCE) };
   const logDistance = clamp(Math.log10(framing), limits.minLogDistance, limits.maxLogDistance);
-  // Looking at the focus from 30° above the ecliptic.
   const yaw = -HALF_PI;
-  const pitch = Math.PI / 6;
   return {
     focus,
     pole: vec3(0, 0, 1),
@@ -118,11 +124,14 @@ export function orbitBy(c: CameraController, dxPx: number, dyPx: number): void {
   c.target.pitch = c.pitch;
 }
 
-/** Starts a refocus on `to` (S2-11), moving to its framing distance. */
+/**
+ * Starts a refocus on `to` (S2-11), moving to `distance`: its framing distance, or the current
+ * distance when it is on screen (S5b-5). Yaw, pitch and pole are kept.
+ */
 export function beginRefocus(
   c: CameraController,
   to: FocusRef,
-  framing: number,
+  distance: number,
   minDist: number,
 ): void {
   // A refocus mid-refocus starts from where the origin is now only approximately; it restarts
@@ -136,7 +145,7 @@ export function beginRefocus(
   c.focus = to;
   c.limits.minLogDistance = Math.log10(minDist);
   c.target.logDistance = clamp(
-    Math.log10(framing),
+    Math.log10(distance),
     c.limits.minLogDistance,
     c.limits.maxLogDistance,
   );

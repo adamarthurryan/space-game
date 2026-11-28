@@ -14,7 +14,11 @@ import type { MapFrame } from '../mapFrame';
 import { createMarkerMaterial } from '../markerMaterial';
 import { toOriginRelativeInto } from '../precision';
 import { hexToRgb, SHIP_MARKER_PX, shipColor } from '../shipStyle';
-import type { MapLayer } from '../stages';
+import type { MapLayer, ViewSnapshot } from '../stages';
+
+/** A flashing ship's marker pulses this many times a second, up to this much larger (S5b-11). */
+const FLASH_HZ = 2;
+const FLASH_GROW = 1.2;
 
 /** The ship markers: one THREE.Points, rebuilt when the set of drawn ships changes. */
 interface ShipPoints {
@@ -66,7 +70,7 @@ export class MarkerLayer implements MapLayer {
   }
 
   /** Marker positions relative to the origin, and sizes in device px (0 = hidden). */
-  update(frame: MapFrame): void {
+  update(frame: MapFrame, view?: ViewSnapshot): void {
     toOriginRelativeInto(this.positions, frame.world, frame.origin);
     const dpr = frame.camera.pixelRatio;
     for (let i = 0; i < frame.order.length; i++) {
@@ -75,11 +79,11 @@ export class MarkerLayer implements MapLayer {
     const { position, size } = this.points.geometry.attributes;
     if (position) position.needsUpdate = true;
     if (size) size.needsUpdate = true;
-    this.updateShips(frame);
+    this.updateShips(frame, view?.flash ?? null);
   }
 
   /** Ship markers: rebuilt if the frame's ship set changed, then positioned like the bodies. */
-  private updateShips(frame: MapFrame): void {
+  private updateShips(frame: MapFrame, flash: ViewSnapshot['flash']): void {
     const fs = frame.ships;
     if (this.ships?.ids !== fs.ids) this.rebuildShips(fs.ids);
     const sp = this.ships;
@@ -87,6 +91,12 @@ export class MarkerLayer implements MapLayer {
     toOriginRelativeInto(sp.positions, fs.world, frame.origin);
     const px = SHIP_MARKER_PX * frame.camera.pixelRatio;
     for (let k = 0; k < fs.ids.length; k++) sp.sizes[k] = fs.markerShown[k] ? px : 0;
+    // A flashing ship pulses (S5b-11).
+    const k = flash?.ref.kind === 'ship' ? fs.indexOf[flash.ref.id] : undefined;
+    if (k !== undefined && flash) {
+      const pulse = 0.5 - 0.5 * Math.cos(2 * Math.PI * FLASH_HZ * flash.elapsed);
+      sp.sizes[k] = px * (1 + FLASH_GROW * pulse);
+    }
     const { position, size } = sp.points.geometry.attributes;
     if (position) position.needsUpdate = true;
     if (size) size.needsUpdate = true;

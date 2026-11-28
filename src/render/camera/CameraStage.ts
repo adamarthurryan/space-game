@@ -7,13 +7,14 @@ import { focusRefOf, useView, type FocusRef } from '../../store/useView';
 import { useWorld } from '../../store/useWorld';
 import { mapObjectWorldInto, type MapFrame } from '../mapFrame';
 import { viewTime } from '../previewTime';
-import { setFrameCamera } from '../projection';
+import { projectPoint, setFrameCamera } from '../projection';
 import {
   beginRefocus,
   beginSnap,
   controllerOriginInto,
   controllerPose,
   createController,
+  START_PITCH,
   stepController,
   type CameraController,
 } from './controller';
@@ -50,6 +51,22 @@ function snapPole(plane: 'ecliptic' | 'selected-orbit'): Vec3 | null {
     : null;
 }
 
+const scratchWorld = vec3(0, 0, 0);
+const scratchScreen = { x: 0, y: 0, depth: 0 };
+
+/**
+ * Whether a body's or ship's centre projects inside the map's viewport, in front of the camera,
+ * in the last frame drawn (S5b-5).
+ */
+export function onScreen(frame: MapFrame, world: World, ref: FocusRef): boolean {
+  mapObjectWorldInto(frame, world, ref, scratchWorld);
+  projectPoint(frame, scratchWorld.x, scratchWorld.y, scratchWorld.z, scratchScreen);
+  const { x, y, depth } = scratchScreen;
+  return (
+    depth < Infinity && x >= 0 && x <= frame.camera.width && y >= 0 && y <= frame.camera.height
+  );
+}
+
 const right = new Vector3();
 const up = new Vector3();
 const back = new Vector3();
@@ -76,6 +93,10 @@ function applyPose(
  * store, and each frame steps it, writes the scene origin into the MapFrame and sets the
  * three.js camera from its pose. Wheel and drag input reach the controller through
  * `input/cameraInput.ts`. The focus may be a body or a ship (S3-15).
+ *
+ * It starts at the focus's framing, looking straight down on the ecliptic (S5b-10). A new focus
+ * that is on screen moves only the centre, keeping the distance and orientation; one off screen
+ * is framed (S5b-5).
  */
 export class CameraStage {
   readonly controller: CameraController;
@@ -93,18 +114,17 @@ export class CameraStage {
       focus,
       framingDistanceOf(world, focus, t),
       minDistanceOf(world, focus, t),
+      START_PITCH,
     );
     this.focusWorld = (ref, out) => mapObjectWorldInto(frame, useWorld.getState().world, ref, out);
     this.unsubscribe = useView.subscribe((s, prev) => {
       if (s.focusSeq !== prev.focusSeq) {
         const w = useWorld.getState().world;
         const t = currentViewTime();
-        beginRefocus(
-          this.controller,
-          s.focus,
-          framingDistanceOf(w, s.focus, t),
-          minDistanceOf(w, s.focus, t),
-        );
+        const distance = onScreen(frame, w, s.focus)
+          ? 10 ** this.controller.target.logDistance
+          : framingDistanceOf(w, s.focus, t);
+        beginRefocus(this.controller, s.focus, distance, minDistanceOf(w, s.focus, t));
       }
       if (s.snapRequest && s.snapRequest.seq !== prev.snapRequest?.seq) {
         const pole = snapPole(s.snapRequest.plane);

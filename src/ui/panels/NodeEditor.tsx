@@ -1,18 +1,18 @@
 import { useState } from 'react';
+import { snapRefusal } from '../../game/actions';
 import { calendarFromJd, jdFromSimTime } from '../../math/time';
 import type { LocalDv } from '../../orbital/frames';
 import { useView } from '../../store/useView';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import { QuantityField } from '../fields/QuantityField';
-import { formatDate, formatDuration, formatSpeed } from '../format';
+import { formatDate, formatDuration, formatDv } from '../format';
 import { parseDate, parseDuration, parseSpeed } from '../parse';
 import styles from './Plan.module.css';
 import { planDetails, resultText, type NodeDetails } from './planDetails';
 
-const ms = (kmps: number) => `${(kmps * 1000).toFixed(1)} m/s`;
 const kg = (m: number) =>
   m >= 1000
-    ? `${(m / 1000).toLocaleString('en-US', { maximumFractionDigits: 2 })} t`
+    ? `${(m / 1000).toLocaleString('en-US', { maximumFractionDigits: 2, useGrouping: false })} t`
     : `${m.toFixed(0)} kg`;
 const AXES: { key: keyof LocalDv; label: string }[] = [
   { key: 'prograde', label: 'Prograde' },
@@ -29,7 +29,7 @@ const parseRelative = (text: string) => parseDuration(text.trim().replace(/^T/i,
 /** The feedback lines of one node (S4-17). */
 export function NodeFeedback({ n }: { n: NodeDetails }) {
   const rows: [string, string, string?][] = [
-    ['Δv', formatSpeed(n.dvRequested)],
+    ['Δv', formatDv(n.dvRequested)],
     ...n.propellant.map((p): [string, string] => [p.name, kg(p.mass)]),
     ['Burn duration', formatDuration(n.burnDuration)],
   ];
@@ -45,7 +45,7 @@ export function NodeFeedback({ n }: { n: NodeDetails }) {
       </dl>
       {n.overBudget && (
         <p className={styles['danger']} role="alert">
-          Over budget: {formatSpeed(n.dvApplied)} of {formatSpeed(n.dvRequested)}
+          Over budget: {formatDv(n.dvApplied)} of {formatDv(n.dvRequested)}
         </p>
       )}
       {n.longBurn && n.prePeriod !== undefined && (
@@ -61,8 +61,20 @@ export function NodeFeedback({ n }: { n: NodeDetails }) {
   );
 }
 
-/** The selected node (S4-15): time, Δv, the feedback, and its actions. */
-export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string }) {
+/**
+ * The selected node (S4-15): time, Δv, the feedback, and its actions. It is the body of the
+ * node's expanded row in the ship's Plan list (S5b-17). A non-active ship's node is read-only:
+ * every control is disabled (S5b-8).
+ */
+export function NodeEditor({
+  shipId,
+  nodeId,
+  readOnly = false,
+}: {
+  shipId: string;
+  nodeId: string;
+  readOnly?: boolean;
+}) {
   const world = useWorld((s) => s.world);
   useWorld((s) => s.version);
   const now = useSimTime();
@@ -76,19 +88,11 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
   const epoch = world.system.epochJd;
   const err = (r: { ok: boolean; error?: string }) => (r.ok ? null : (r.error ?? 'Refused'));
   const edit = (e: Parameters<typeof store.editNode>[2]) => err(store.editNode(shipId, nodeId, e));
+  // Snap is disabled on a circular orbit, with the reason (S5b-20).
+  const circular = snapRefusal(world, shipId, nodeId);
 
   return (
     <section aria-label="Node editor" className={styles['editor']}>
-      <button
-        type="button"
-        className={styles['link']}
-        onClick={() => select({ kind: 'ship', id: shipId })}
-      >
-        ← {ship.name}
-      </button>
-      <h3 className={styles['name']}>
-        Node{!node.enabled && <span className={styles['dim']}> (disabled)</span>}
-      </h3>
       <QuantityField
         label="Time"
         value={node.t}
@@ -96,6 +100,7 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
         parse={(text) => parseDate(text, epoch)}
         invalidText="Use YYYY-MM-DD hh:mm:ss"
         nudge={T_NUDGE}
+        disabled={readOnly}
         onCommit={(t) => edit({ t })}
       />
       <QuantityField
@@ -105,6 +110,7 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
         parse={parseRelative}
         invalidText="Use a duration such as 1d 2h 30m"
         nudge={T_NUDGE}
+        disabled={readOnly}
         onCommit={(dt) => edit({ t: now + dt })}
       />
       {AXES.map((a) => (
@@ -112,10 +118,11 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
           key={a.key}
           label={a.label}
           value={node.dv[a.key]}
-          format={ms}
+          format={formatDv}
           parse={parseSpeed}
           invalidText="Use a speed such as 12 m/s or 3.1 km/s"
           nudge={DV_NUDGE}
+          disabled={readOnly}
           onCommit={(v) => edit({ dv: { [a.key]: v } })}
         />
       ))}
@@ -125,6 +132,7 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
           <input
             type="checkbox"
             checked={node.enabled}
+            disabled={readOnly}
             onChange={(e) => edit({ enabled: e.target.checked })}
           />
           Enabled
@@ -132,6 +140,8 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
         <button
           type="button"
           className={styles['action']}
+          disabled={readOnly || circular !== null}
+          title={circular ?? undefined}
           onClick={() => store.snapNode(shipId, nodeId, 'periapsis')}
         >
           Snap to Pe
@@ -139,6 +149,8 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
         <button
           type="button"
           className={styles['action']}
+          disabled={readOnly || circular !== null}
+          title={circular ?? undefined}
           onClick={() => store.snapNode(shipId, nodeId, 'apoapsis')}
         >
           Snap to Ap
@@ -146,6 +158,7 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
         <button
           type="button"
           className={styles['action']}
+          disabled={readOnly}
           onClick={() => {
             if (store.deleteNode(shipId, nodeId).ok) select({ kind: 'ship', id: shipId });
           }}
@@ -155,6 +168,7 @@ export function NodeEditor({ shipId, nodeId }: { shipId: string; nodeId: string 
         <button
           type="button"
           className={styles['action']}
+          disabled={readOnly}
           title="Warp to 1 min before the node, paused"
           onClick={() => setWarpError(err(store.warpToNode(shipId, nodeId)))}
         >

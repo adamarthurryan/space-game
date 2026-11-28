@@ -37,18 +37,3 @@
   overflow: auto;
   padding: 10px;
 }
-
-.empty {
-  margin: 0;
-  color: var(--color-text-dim);
-}
-
-.filters {
-  border-top: 1px solid var(--color-border);
-  padding: 6px 10px;
-}
-
-.filters summary {
-  cursor: pointer;
-  color: var(--color-text-dim);
-}

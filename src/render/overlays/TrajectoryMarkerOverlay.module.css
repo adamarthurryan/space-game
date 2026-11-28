@@ -66,3 +66,14 @@
 .ghost {
   opacity: 0.85;
 }
+
+/* Behind a nearer body's disc (S5b-14): faint, and its text hidden. */
+.dimmed {
+  opacity: 0.3;
+}
+
+/* A body at an SOI entry (S5b-13): a hollow marker in the ship's colour. */
+.encounter {
+  font-size: 12px;
+  line-height: 12px;
+}

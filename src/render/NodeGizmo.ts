@@ -5,6 +5,12 @@
  * A handle drag changes its Δv component with a cubic sensitivity (Shift fine, Alt coarse); a
  * drag of the node itself slides its time along the path without the node, frozen at the press.
  * Edits are queued and applied once per animation frame by `flush()` (S4-8).
+ *
+ * Its size follows the planned path after the node (decision 181, revising S5b-15 in
+ * planning/sprint-5b.md): full size while that path is at least 150 px across on screen,
+ * shrinking to 20 px arms at 37.5 px, and hidden below that, when only the node glyph is drawn
+ * and the node can't be dragged.
+ * A handle behind a nearer body's disc is dimmed and can't be picked (S5b-14).
  */
 
 import {
@@ -33,10 +39,13 @@ import { MIN_NODE_LEAD } from '../sim/maneuver';
 import type { World } from '../sim/world';
 import { useWorld } from '../store/useWorld';
 import { frameWorldInto, type MapFrame } from './mapFrame';
+import { sceneOccluded } from './occlusion';
 import {
+  conicScreenSize,
   dragDelta,
   dragModeOf,
-  GIZMO_ARM_PX,
+  GIZMO_MIN_ARM_PX,
+  gizmoArmPx,
   gizmoScale,
   GIZMO_HANDLES,
   handleDirection,
@@ -71,6 +80,8 @@ interface HandleObjects {
   dir: Vec3;
   /** False when the arm points nearly at the camera: hidden, and not hittable. */
   shown: boolean;
+  /** Behind a nearer body's disc: dimmed, and not hittable (S5b-14). */
+  occluded: boolean;
 }
 
 /** A handle whose arm is shorter than this share of its length on screen is hidden. */
@@ -87,6 +98,10 @@ interface Target {
   scene: Vec3;
   scale: number;
   basis: OrbitalBasis;
+  /** The planned path after the node, across on screen, px (decision 181). */
+  conicPx: number;
+  /** The arm length on screen, px, or null when the gizmo is hidden. */
+  armPx: number | null;
 }
 
 type Drag =
@@ -164,7 +179,7 @@ export class NodeGizmo implements MapLayer {
       hit.frustumCulled = false;
       hit.userData['handle'] = h;
       this.group.add(cone, hit);
-      this.handles.set(h, { cone, hit, base, dir: vec3(0, 0, 0), shown: true });
+      this.handles.set(h, { cone, hit, base, dir: vec3(0, 0, 0), shown: true, occluded: false });
     }
     this.group.visible = false;
     this.group.name = 'node-gizmo';
@@ -178,8 +193,8 @@ export class NodeGizmo implements MapLayer {
   update(frame: MapFrame, view: ViewSnapshot): void {
     this.target = this.findTarget(frame, view);
     const t = this.target;
-    this.group.visible = t !== null;
-    if (!t) return;
+    this.group.visible = t !== null && t.armPx !== null;
+    if (!t || !this.group.visible) return;
     const centre: ScreenPoint = { x: 0, y: 0, depth: 0 };
     const tip: ScreenPoint = { x: 0, y: 0, depth: 0 };
     projectScenePoint(frame.camera, t.scene.x, t.scene.y, t.scene.z, centre);
@@ -202,8 +217,15 @@ export class NodeGizmo implements MapLayer {
         tip,
       );
       const armPx = Math.hypot(tip.x - centre.x, tip.y - centre.y);
-      o.shown = tip.depth > 0 && armPx >= MIN_ARM_SHARE * GIZMO_ARM_PX * CONE_AT;
+      o.shown = tip.depth > 0 && armPx >= MIN_ARM_SHARE * (t.armPx ?? 0) * CONE_AT;
       o.cone.visible = o.shown;
+      o.occluded = sceneOccluded(
+        frame,
+        t.scene.x + d.x * k2,
+        t.scene.y + d.y * k2,
+        t.scene.z + d.z * k2,
+      );
+      o.cone.material.opacity = o.occluded ? 0.3 : 1;
       const active = this.hovered === h || (this.drag?.kind === 'handle' && this.drag.handle === h);
       o.cone.material.color.copy(o.base);
       if (active) o.cone.material.color.lerp(new Color('#ffffff'), 0.45);
@@ -242,13 +264,36 @@ export class NodeGizmo implements MapLayer {
     const sp: ScreenPoint = { x: 0, y: 0, depth: 0 };
     projectScenePoint(frame.camera, scene.x, scene.y, scene.z, sp);
     if (!(sp.depth > 0)) return null;
+    // The planned path after the node (decision 181): the segment that starts at an executed
+    // node, around the same parent; for a disabled node, the path it sits on.
+    const i = traj.segments.indexOf(a.segment);
+    const next = traj.segments[i + 1];
+    const seg = a.segment.endNodeId === node.id && next ? next : a.segment;
+    // Its points, relative to its parent, into the scene: offset as the node is.
+    const off = vec3(scene.x - a.pre.r.x, scene.y - a.pre.r.y, scene.z - a.pre.r.z);
+    const out = vec3(0, 0, 0);
+    const conicPx = conicScreenSize(
+      frame.camera,
+      conicGeometry(world.system, seg),
+      Math.max(frame.t, seg.tStart),
+      seg.tEnd,
+      (p) => {
+        out.x = p.x + off.x;
+        out.y = p.y + off.y;
+        out.z = p.z + off.z;
+        return out;
+      },
+    );
+    const armPx = gizmoArmPx(conicPx);
     return {
       shipId: ship.id,
       nodeId: node.id,
       dv: { ...node.dv },
       scene,
-      scale: gizmoScale(sp.depth, frame.camera),
+      scale: gizmoScale(sp.depth, frame.camera, armPx ?? GIZMO_MIN_ARM_PX),
       basis: localOrbitalBasis(a.pre, fallbackPole(world.system, a.parentId)),
+      conicPx,
+      armPx,
     };
   }
 
@@ -263,10 +308,18 @@ export class NodeGizmo implements MapLayer {
     this.camera.updateMatrixWorld();
     this.raycaster.setFromCamera(this.ndc, this.camera);
     const hits = this.raycaster.intersectObjects(
-      [...this.handles.values()].filter((o) => o.shown).map((o) => o.hit),
+      [...this.handles.values()].filter((o) => o.shown && !o.occluded).map((o) => o.hit),
       false,
     );
     return (hits[0]?.object.userData['handle'] as GizmoHandle | undefined) ?? null;
+  }
+
+  /**
+   * Whether the selected node's gizmo is hidden because its planned path is too small on screen
+   * (decision 181): the node then can't be dragged, and its glyph's tooltip says to zoom in.
+   */
+  get tooSmall(): boolean {
+    return this.target !== null && this.target.armPx === null;
   }
 
   setHovered(h: GizmoHandle | null): void {
@@ -398,13 +451,16 @@ export class NodeGizmo implements MapLayer {
   /** The gizmo on screen, for the debug handle (S4-20). */
   debug(frame: MapFrame) {
     const t = this.target;
-    if (!t || !this.group.visible) return null;
+    if (!t) return null;
     const sp: ScreenPoint = { x: 0, y: 0, depth: 0 };
     return {
       shipId: t.shipId,
       nodeId: t.nodeId,
+      visible: this.group.visible,
+      conicPx: t.conicPx,
+      armPx: t.armPx,
       handles: GIZMO_HANDLES.map((h) => {
-        const { dir, shown } = this.handles.get(h)!;
+        const { dir, shown, occluded } = this.handles.get(h)!;
         const k = t.scale * CONE_AT;
         projectScenePoint(
           frame.camera,
@@ -413,7 +469,14 @@ export class NodeGizmo implements MapLayer {
           t.scene.z + dir.z * k,
           sp,
         );
-        return { handle: h, shown, x: sp.x, y: sp.y, axis: screenAxis(frame.camera, t.scene, dir) };
+        return {
+          handle: h,
+          shown,
+          occluded,
+          x: sp.x,
+          y: sp.y,
+          axis: screenAxis(frame.camera, t.scene, dir),
+        };
       }),
     };
   }

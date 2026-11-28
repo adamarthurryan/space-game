@@ -5,6 +5,7 @@
  */
 
 import { norm, vec3, type Vec3 } from '../math/vec3';
+import { hasApsides } from '../orbital/passages';
 import { bodyStateIn, getBody, type BodyId, type BodySystem } from '../sim/body';
 import type { ShipId } from '../sim/ship';
 import { segmentStateAt, type Segment, type Trajectory } from '../sim/trajectory';
@@ -66,8 +67,10 @@ export function trajectoryMarkers(
     if (withApsides) {
       // Within the segment's drawn window: its first revolution, or to its end.
       const to = Math.min(seg.tEnd, from + g.period);
-      const apsides: [TrajectoryMarkerKind, number][] = [['periapsis', 0]];
-      if (g.kind === 'elliptic') apsides.push(['apoapsis', Math.PI]);
+      // Only where the passage search finds them too: none on a circular orbit (S5b-20).
+      const apsides: [TrajectoryMarkerKind, number][] = [];
+      if (hasApsides(g.e, 'periapsis')) apsides.push(['periapsis', 0]);
+      if (g.kind === 'elliptic' && hasApsides(g.e, 'apoapsis')) apsides.push(['apoapsis', Math.PI]);
       for (const [kind, x] of apsides) {
         const tp = nextPassage(g, x, from, to);
         if (tp === null) continue;

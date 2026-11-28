@@ -10,7 +10,7 @@ import { bodyStateIn, type BodyId, type BodySystem } from '../sim/body';
 import type { NodeId } from '../sim/maneuver';
 import type { StateVector } from '../orbital/elements';
 import type { Ship, ShipId } from '../sim/ship';
-import { segmentStateAt, type Trajectory } from '../sim/trajectory';
+import { segmentStateAt, type Segment, type Trajectory } from '../sim/trajectory';
 
 export interface NodeMarker {
   shipId: ShipId;
@@ -31,6 +31,8 @@ export interface NodeAnchor {
   pre: StateVector;
   /** Relative to the frame body, at t. */
   pos: Vec3;
+  /** The segment the node sits on, before the burn. */
+  segment: Segment;
 }
 
 /** The anchor of one node on the ship's trajectory, or null if it isn't reached (S4-14). */
@@ -55,7 +57,7 @@ export function nodeAnchor(
     pos.y += off.y;
     pos.z += off.z;
   }
-  return { t: node.t, parentId: seg.parentId, pre, pos };
+  return { t: node.t, parentId: seg.parentId, pre, pos, segment: seg };
 }
 
 /** The markers of one ship's nodes after `now`. */

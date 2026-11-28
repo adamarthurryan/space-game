@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  dtOf,
-  SPAN_DEFAULT,
-  SPAN_MAX,
-  SPAN_MIN,
-  stripSpan,
-  stripTicks,
-  TICK_MIN_GAP_PX,
-  xOf,
-} from './scale';
+import { SECONDS_PER_DAY, SECONDS_PER_JULIAN_YEAR } from '../../math/units';
+import { dtOf, STRIP_SPAN, STRIP_T0, stripScale, stripTicks, TICK_MIN_GAP_PX, xOf } from './scale';
 
 const s = { span: 200 * 86_400, width: 600 };
 
@@ -25,9 +17,11 @@ describe('strip scale (S5-6)', () => {
     expect(xOf(s, s.span * 2)).toBeCloseTo(600, 9);
   });
 
-  it('is logarithmic: 20 min and 200 days both fit', () => {
-    expect(xOf(s, 1200)).toBeGreaterThan(100);
-    expect(xOf(s, 1200)).toBeLessThan(250);
+  it('is logarithmic: 20 min and 200 days both fit, well apart', () => {
+    const f = stripScale(600);
+    expect(xOf(f, 1200)).toBeGreaterThan(40);
+    expect(xOf(f, 200 * SECONDS_PER_DAY)).toBeLessThan(560);
+    expect(xOf(f, 200 * SECONDS_PER_DAY) - xOf(f, 1200)).toBeGreaterThan(300);
   });
 
   it('inverts', () => {
@@ -39,11 +33,21 @@ describe('strip scale (S5-6)', () => {
     expect(dtOf(s, 1e4)).toBe(s.span);
   });
 
-  it('spans to the trajectory end, clamped, or a year with no ship', () => {
-    expect(stripSpan(null, 0)).toBe(SPAN_DEFAULT);
-    expect(stripSpan(100, 0)).toBe(SPAN_MIN);
-    expect(stripSpan(1e12, 0)).toBe(SPAN_MAX);
-    expect(stripSpan(1e6 + 50, 50)).toBe(1e6);
+  it('spans a fixed 10 years with T0 = 10 min, so the ticks never move (S5b-23)', () => {
+    expect(STRIP_T0).toBe(600);
+    expect(STRIP_SPAN).toBe(10 * SECONDS_PER_JULIAN_YEAR);
+    const f = stripScale(1000);
+    expect(f.span).toBe(STRIP_SPAN);
+    const pct = (dt: number) => (100 * xOf(f, dt)) / f.width;
+    expect(pct(3600)).toBeCloseTo(15, 0);
+    expect(Math.abs(pct(SECONDS_PER_DAY) - 38)).toBeLessThan(0.5);
+    expect(Math.abs(pct(SECONDS_PER_JULIAN_YEAR / 12) - 64)).toBeLessThan(0.5);
+    expect(Math.abs(pct(SECONDS_PER_JULIAN_YEAR) - 83)).toBeLessThan(0.5);
+    expect(Math.abs(pct(3600) - 15)).toBeLessThan(0.5);
+    // The ticks depend on the width only: the same for any now.
+    expect(stripTicks(stripScale(1000))).toEqual(stripTicks(f));
+    const back = dtOf(f, xOf(f, 4 * SECONDS_PER_DAY));
+    expect(Math.abs(back - 4 * SECONDS_PER_DAY)).toBeLessThan(1e-6);
   });
 
   it('places ticks inside the span, ordered, apart', () => {

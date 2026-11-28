@@ -14,19 +14,23 @@ export const MARKER_BELOW_DISC_PX = 3;
 export const SPHERE_MIN_DISC_PX = 0.5;
 /** A body this close to its parent's centre on screen, px, merges into it. */
 export const MERGE_PX = 6;
+/** What the projection needs of the view: the objects that never merge into their parent. */
+export interface ProjectionView {
+  focus: MapObjectRef;
+  selected: MapObjectRef | null;
+  flash?: { ref: MapObjectRef } | null;
+}
+
 /** Points closer to the camera plane than this (km) count as behind it. */
 const NEAR_KM = 1e-3;
 
 /**
  * Projects every body and ship with `frame.camera`. Behind-camera objects get depth Infinity
  * and no marker. The disc radius is the body's angular radius over half the vertical field of
- * view. A ship merges into its parent like a body (S3-20), unless it is focused or selected.
+ * view. A ship merges into its parent like a body (S3-20), unless it is focused, selected or
+ * flashing (S5b-11).
  */
-export function projectFrame(
-  frame: MapFrame,
-  system: BodySystem,
-  view?: { focus: MapObjectRef; selected: MapObjectRef | null },
-): void {
+export function projectFrame(frame: MapFrame, system: BodySystem, view?: ProjectionView): void {
   const { world, origin, camera: cam, order } = frame;
   const tanHalf = Math.tan(cam.fovRad / 2);
   const aspect = cam.width / cam.height;
@@ -78,7 +82,7 @@ export function projectFrame(
 }
 
 /** Projects a point at `world − origin`, returning its screen position and distance. */
-function projectPoint(
+export function projectPoint(
   frame: MapFrame,
   wx: number,
   wy: number,
@@ -107,10 +111,7 @@ function projectPoint(
 
 const scratch = { x: 0, y: 0, depth: 0 };
 
-function projectShips(
-  frame: MapFrame,
-  view?: { focus: MapObjectRef; selected: MapObjectRef | null },
-): void {
+function projectShips(frame: MapFrame, view?: ProjectionView): void {
   const fs = frame.ships;
   for (let k = 0; k < fs.ids.length; k++) {
     projectPoint(frame, fs.world[3 * k]!, fs.world[3 * k + 1]!, fs.world[3 * k + 2]!, scratch);
@@ -119,7 +120,11 @@ function projectShips(
     fs.depth[k] = scratch.depth;
     const p = fs.parentIndex[k]!;
     const ref: MapObjectRef = { kind: 'ship', id: fs.ids[k]! };
-    const kept = !!view && (sameRef(view.focus, ref) || sameRef(view.selected, ref));
+    const kept =
+      !!view &&
+      (sameRef(view.focus, ref) ||
+        sameRef(view.selected, ref) ||
+        sameRef(view.flash?.ref ?? null, ref));
     let merged = 0;
     if (!kept && scratch.depth < Infinity && frame.depth[p]! < Infinity) {
       const d = Math.hypot(scratch.x - frame.screenX[p]!, scratch.y - frame.screenY[p]!);

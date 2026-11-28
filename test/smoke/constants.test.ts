@@ -15,7 +15,7 @@ const tli = (text: string, pattern: RegExp) => {
 };
 
 describe('the smoke test’s TLI', () => {
-  for (const file of ['maneuvers.mjs', 'timeline.mjs']) {
+  for (const file of ['maneuvers.mjs', 'timeline.mjs', 'usability.mjs']) {
     it(`in ${file} matches SMOKE_TLI in src/gen/lunarMission.ts`, () => {
       const smoke = tli(read(file), /const TLI = \{ dt: ([\d.]+), dv: ([\d.]+) \}/);
       const source = tli(

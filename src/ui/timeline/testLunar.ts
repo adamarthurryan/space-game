@@ -18,6 +18,9 @@ export function setUpLunar(): { shipId: string; nodeId: string } {
     dv: { prograde: SMOKE_TLI.dv, normal: 0, radial: 0 },
   });
   if (!n.ok) throw new Error(n.error);
-  act(() => useView.getState().select({ kind: 'ship', id: r.value }));
+  act(() => {
+    useView.getState().select({ kind: 'ship', id: r.value });
+    useView.getState().activate(r.value);
+  });
   return { shipId: r.value, nodeId: n.value };
 }

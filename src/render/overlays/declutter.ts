@@ -38,7 +38,7 @@ const TIER = {
 };
 const TIER_SCALE = 1e7;
 /** Priorities at or above this are always placed. */
-const FORCED = TIER.selected * TIER_SCALE;
+export const FORCED = TIER.selected * TIER_SCALE;
 
 type LabelView = {
   focus: MapObjectRef;

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { focusRefOf, useView } from '../store/useView';
+import { focusRefOf, shipOf, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 
 /**
@@ -24,9 +24,9 @@ function ignoredFor(target: EventTarget | null, key: string): boolean {
 
 /**
  * Map shortcuts (S2-20): Space play/pause, `,` and `.` warp down and up, F focus the selection,
- * E and P snap to the ecliptic and the selected body's or ship's orbit, Esc end a preview or
- * clear the selection,
- * Delete remove the selected node (F on a node focuses its ship). Ignored
+ * A fly (activate) the selected ship, E and P snap to the ecliptic and the selected body's or
+ * ship's orbit, Esc end a preview or clear the selection, Delete remove the selected node (F on
+ * a node focuses its ship). Ignored
  * while a text field has focus, and with Ctrl, Alt or Meta held.
  */
 export function useMapKeys(): void {
@@ -51,6 +51,14 @@ export function useMapKeys(): void {
           if (!view.selected) return;
           view.focusOn(view.selected);
           break;
+        case 'a':
+        case 'A': {
+          // Flies the selected ship, or the selected node's ship (S5b-6).
+          const id = shipOf(view.selected);
+          if (id === null || world.world.ships[id]?.status !== 'coasting') return;
+          view.activate(id);
+          break;
+        }
         case 'e':
         case 'E':
           view.snapTo('ecliptic');
@@ -68,9 +76,9 @@ export function useMapKeys(): void {
           break;
         case 'Delete':
         case 'Backspace': {
-          // Deletes the selected node and selects its ship (S4-10).
+          // Deletes the selected node of the active ship, and selects its ship (S4-10, S5b-8).
           const sel = view.selected;
-          if (sel?.kind !== 'node') return;
+          if (sel?.kind !== 'node' || sel.shipId !== view.activeShipId) return;
           if (world.deleteNode(sel.shipId, sel.id).ok)
             view.select({ kind: 'ship', id: sel.shipId });
           break;

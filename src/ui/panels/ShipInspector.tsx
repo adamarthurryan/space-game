@@ -1,6 +1,6 @@
 import { registry } from '../../content/registry';
 import { getBody } from '../../sim/body';
-import { useView } from '../../store/useView';
+import { resolveActiveShip, useView } from '../../store/useView';
 import { useSimTime, useWorld } from '../../store/useWorld';
 import {
   formatAngle,
@@ -27,16 +27,18 @@ function Rows({ rows }: { rows: [string, string][] }) {
 }
 
 const tonnes = (kg: number) =>
-  `${(kg / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })} t`;
+  `${(kg / 1000).toLocaleString('en-US', { maximumFractionDigits: 1, useGrouping: false })} t`;
 
 /**
- * The selected ship (S3-21, minimal): design and status; mass, propellant, Δv, engines and
+ * The selected ship, or the ship of the selected node (S3-21, minimal): design and status; the
+ * plan, with the selected node's editor inline (S5b-17); mass, propellant, Δv, engines and
  * acceleration; the current SOI and orbit; and the upcoming events. Updated at 10 Hz.
  */
 export function ShipInspector({ id }: { id: string }) {
   const world = useWorld((s) => s.world);
   useWorld((s) => s.version);
   const t = useSimTime();
+  const activeShipId = useView((s) => s.activeShipId);
   const { focusOn } = useView.getState();
   if (!world.ships[id]) return <p className={styles['empty']}>Nothing selected</p>;
   const d = shipDetails(world, id, t);
@@ -97,7 +99,9 @@ export function ShipInspector({ id }: { id: string }) {
           Focus
         </button>
       )}
-      {!d.destroyed && <PlanSection shipId={id} />}
+      {!d.destroyed && (
+        <PlanSection shipId={id} readOnly={resolveActiveShip(world, activeShipId) !== id} />
+      )}
       <h4 className={styles['section']}>Mass and propellant</h4>
       <Rows rows={mass} />
       <h4 className={styles['section']}>Engines</h4>

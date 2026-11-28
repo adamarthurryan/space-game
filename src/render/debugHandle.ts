@@ -11,8 +11,9 @@ import { useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { controllerPose, type CameraController } from './camera/controller';
 import type { TrajectoryLayer } from './layers/TrajectoryLayer';
-import type { MapFrame } from './mapFrame';
+import { resolveFrameBody, type MapFrame } from './mapFrame';
 import { viewTime } from './previewTime';
+import { projectScenePoint } from './screenDash';
 import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
 
 interface DebugSources {
@@ -67,7 +68,61 @@ function createProbes() {
     },
     /** The labels placed this frame. */
     labels() {
-      return frame().labels.map((l) => ({ id: l.ref.id, kind: l.ref.kind, ...l.rect }));
+      return frame().labels.map((l) => ({
+        id: l.ref.id,
+        kind: l.ref.kind,
+        ...l.rect,
+        // The names of a merged label, on its first part (S5b-16).
+        ...(l.parts ? { parts: l.parts.map((p) => p.id) } : {}),
+      }));
+    },
+    /** The reference frame and the body it resolves to at the view time (S5b-1). */
+    frame() {
+      const { world } = useWorld.getState();
+      const v = useView.getState();
+      return {
+        ref: v.frame,
+        bodyId: resolveFrameBody(world, v.frame, viewTime(world.clock.t, v.preview)),
+      };
+    },
+    /** The bodies at their SOI entries drawn this frame, with their screen points (S5b-13). */
+    encounterGhosts() {
+      const f = frame();
+      const sp = { x: 0, y: 0, depth: 0 };
+      return f.encounters.map((g) => {
+        projectScenePoint(
+          f.camera,
+          g.world.x - f.origin.x,
+          g.world.y - f.origin.y,
+          g.world.z - f.origin.z,
+          sp,
+        );
+        const marker = sources.markers?.placed.find(
+          (m) =>
+            m.kind === 'encounter' &&
+            m.shipId === g.shipId &&
+            Math.hypot(m.x - sp.x, m.y - sp.y) < 1,
+        );
+        return { ...g, world: { ...g.world }, x: sp.x, y: sp.y, text: marker?.text ?? null };
+      });
+    },
+    /** The Fly button's label and state: fly, active or idle (S5b-7). */
+    fly() {
+      const b = document.querySelector<HTMLButtonElement>('[data-fly]');
+      return b
+        ? {
+            label: b.getAttribute('aria-label'),
+            state: b.dataset['fly'],
+            pressed: b.getAttribute('aria-pressed') === 'true',
+            disabled: b.disabled,
+          }
+        : null;
+    },
+    /** The object flashing, and the wall ms left, or null (S5b-11). */
+    flash() {
+      const f = useView.getState().flash;
+      const left = f ? f.until - performance.now() : 0;
+      return f && left > 0 ? { ref: f.ref, left } : null;
     },
     /** A drawn ship's projection (S3-22); null if it isn't drawn (destroyed). */
     ship(id: string) {
@@ -156,7 +211,7 @@ function createProbes() {
     elapsedVertices(id: string) {
       return sources.trajectories?.elapsedCounts.get(id) ?? [];
     },
-    /** The timeline strip: its span and box, and each glyph's event and centre (S5-15). */
+    /** The timeline strip: its span and box, each glyph's event and centre (S5-15), the ticks. */
     timeline() {
       const strip = document.querySelector<HTMLElement>('[aria-label="Timeline strip"]');
       if (!strip) return null;
@@ -173,10 +228,18 @@ function createProbes() {
           };
         },
       );
+      const ticks = Array.from(strip.querySelectorAll<HTMLElement>('[data-tick]')).map((el) => ({
+        label: el.dataset['tick'],
+        x: el.getBoundingClientRect().left,
+      }));
+      const beyond = strip.querySelector<HTMLElement>('[data-testid="beyond-prediction"]');
       return {
         span: Number(strip.dataset['span']),
         box: { left: box.left, top: box.top, width: box.width, height: box.height },
         glyphs,
+        // The fixed ticks (S5b-23), and where the shading past the prediction starts (S5b-24).
+        ticks,
+        beyondX: beyond ? beyond.getBoundingClientRect().left : null,
       };
     },
     /** The preview and the time the map is drawn at, or null (S5-15). */

@@ -2,7 +2,7 @@
 
 This sprint sits between [sprint 5](sprint-5.md) and sprint 6 of [milestone 1](milestone-1-sprints.md). Its job is to review the interface built in sprints 2 to 5, and to improve it before fleets, alarms and the planning tools (sprints 6 to 9) add more on top.
 
-**Status:** planned. The inventory (§1) and the walkthrough findings (§2) are the inputs. §3 to §10 are the plan. Three questions are still open (end of document); none of them blocks starting.
+**Status:** done. The inventory (§1) and the walkthrough findings (§2) are the inputs. §3 to §10 are the plan, and the [implementation notes](#implementation-notes) record what was built. Three questions are still open (end of document; decisions.md open questions 10 to 12).
 
 ## 1. Inventory: what the interface is today
 
@@ -585,3 +585,19 @@ If open question 2 is settled before step 3 (F on the already-focused object ref
 1. **Does editing a plan need the ship to be active?** For now, a non-active ship is read-only (S5b-8). The question is whether maneuver editing, and the other ship controls that later sprints add (targets, planning tools, docking actions), should all need activation, or whether the inspector should edit any ship and only the map tools need it.
 2. **Getting the framed view back.** With S5b-5, focusing something on screen no longer zooms to frame it. Should F on the object that is already focused reframe it (decision 81's framing distance)?
 3. **The start view.** S5b-10 starts on the Earth–Moon system, looking down on the ecliptic, as a stopgap for the sandbox. Later scenarios may start focused on the mothership (the generation ship). What should the start view be once scenarios exist, and should it depend on the scenario?
+
+## Implementation notes
+
+Choices made while building, beyond the decisions above. They are logged in [decisions.md](../docs/decisions.md) as decisions 153–180; S5b-1 to S5b-24 are decisions 153–176.
+
+1. **The F17 cause.** `trajectoryMarkers` placed Pe and Ap on every conic: `conicGeometry` falls back to r₀ as the periapsis direction below e = 1e-10, so a circular orbit got an "Ap" opposite the ship. The passage search refused below `elements.ts`'s `CIRCULAR_E` (1e-11). Both now use `hasApsides`. The new threshold is named `APSIDES_MIN_E` rather than `CIRCULAR_E`, which `elements.ts` already exports with another meaning (the convention for ω and ν).
+2. **"Circular orbit" refusals.** `game/actions.ts` gained `addApsisRefusal` (the path is circular where "Add node ▾" searches from, and no passage is found) and `snapRefusal` (the segment the node sits on is circular, read from the current trajectory so the inspector needn't recompute the path without the node). The actions use them too, so the menu and the actions agree.
+3. **Path framing** is the distance at which the path's farthest point from the ship, × 1.1, fills half the view's height (`FOV_DEG` moved to `framing.ts`). A LEO ship is framed at about 31,000 km; a ship just after a TLI out past the Moon.
+4. **On screen** means in the last frame drawn. The refocus clamps the kept distance to the new focus's minimum. Because focusing an on-screen ship keeps the distance, the earlier smoke tests that framed a ship by focusing it now zoom by wheel (`map.mjs` zooms in before double-clicking Jupiter, `maneuvers.mjs` zooms in on the low orbit and picks a path point clear of Earth's disc).
+5. **The gizmo size** uses the larger projected axis of an ellipse (decision 177). While it is hidden, the selected node can't be dragged either, so the tooltip "Zoom in to drag the node" holds. **Revised after testing (decision 181):** S5b-15 made the gizmo hard to use, so its size now follows the planned path after the node rather than the conic before it, it shrinks from 60 px to 20 px arms between 150 px and 37.5 px across, and it hides only below 37.5 px.
+6. **Merged labels** are laid out from the existing spans: the parent's, then each ship's, with the separators as CSS `::before` in the gap between them (`MERGE_GAP_PX`), so the measured widths stay valid; "+N" is a pooled span. A flashing ship is kept from merging into its parent on screen (decision 178), so with the spawned ship selected the merge comes from its label overlapping Earth's.
+7. **Encounter ghosts** are computed once per frame by `EncounterGhostLayer` into `frame.encounters`, which the marker overlay reads for the ○ markers and their texts; those are placed first, so "Moon at entry" wins over "Moon SOI" (decision 179).
+8. **Read-only** is enforced in the UI, including the Delete key, which now only deletes the active ship's node. The actions don't check activation (S5b-8).
+9. **Popover Esc** is caught on the window in the capture phase and stops propagation, so neither `useMapKeys` nor the field's own Escape sees it.
+10. **The smoke test.** `usability.mjs` follows §7's thirteen checks. For the strip's shading it adds a retrograde node before the TLI, so the prediction ends at an impact within 10 years, then deletes it. For the frame following the ship it runs the clock through the TLI node, then warps to the Moon SOI entry. Its TLI constant is checked by `constants.test.ts` with the others.
+11. **Revised after testing.** Selecting no longer sets the frame: only a focus change or activating a ship does, plus Frame ▾ (decision 183, revising S5b-2). And no numeric format groups digits (decision 182, revising S5b-18's `3,131.0 m/s`), because the node fields couldn't read back the values they showed.

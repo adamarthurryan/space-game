@@ -2,31 +2,29 @@
  * The timeline strip's time axis (decision S5-6 in planning/sprint-5.md): logarithmic from now at
  * the left edge to the span's end at the right, so a node in 20 min and an arrival in 200 days
  * both fit. x(Δt) = width · log(1 + Δt/T0) / log(1 + span/T0).
+ *
+ * The span is fixed at 10 years, with T0 = 10 min (S5b-23 in planning/sprint-5b.md), so the
+ * ticks never move: 1 h sits at 15%, 1 d at 38%, 1 mo at 64% and 1 yr at 83%.
  */
 
 import { SECONDS_PER_DAY, SECONDS_PER_JULIAN_YEAR } from '../../math/units';
 
-/** The axis's knee, s: below it the axis is nearly linear. */
-export const STRIP_T0 = 60;
-export const SPAN_MIN = SECONDS_PER_DAY;
-export const SPAN_MAX = 10 * SECONDS_PER_JULIAN_YEAR;
-/** The span with no active ship. */
-export const SPAN_DEFAULT = SECONDS_PER_JULIAN_YEAR;
+/** The axis's knee, s: below it the axis is nearly linear (S5b-23). */
+export const STRIP_T0 = 600;
+/** The strip's span from now, s: fixed (S5b-23). */
+export const STRIP_SPAN = 10 * SECONDS_PER_JULIAN_YEAR;
 /** Ticks closer than this to the previous one (or to now) are dropped, px. */
 export const TICK_MIN_GAP_PX = 40;
 
 export interface StripScale {
-  /** s from now to the right edge. */
+  /** s from now to the right edge: STRIP_SPAN in the app. */
   span: number;
   /** px. */
   width: number;
 }
 
-/** The span: the trajectory's end from now, clamped to [1 d, 10 yr]; 1 yr with none. */
-export function stripSpan(horizon: number | null, now: number): number {
-  if (horizon === null) return SPAN_DEFAULT;
-  return Math.min(Math.max(horizon - now, SPAN_MIN), SPAN_MAX);
-}
+/** The strip's scale at a width: the fixed span (S5b-23). */
+export const stripScale = (width: number): StripScale => ({ span: STRIP_SPAN, width });
 
 /** px from the left edge for a time dt after now, clamped to the strip. */
 export function xOf(s: StripScale, dt: number): number {

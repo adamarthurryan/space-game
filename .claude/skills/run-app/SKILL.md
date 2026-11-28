@@ -11,7 +11,7 @@ description: Launch the space game in a browser and check that it works. Use whe
 npm run smoke
 ```
 
-It runs `test/smoke/shell.mjs`, then `test/smoke/map.mjs`, then `test/smoke/ships.mjs`, then `test/smoke/maneuvers.mjs`. Each starts Vite on port 5199
+It runs `test/smoke/shell.mjs`, then `test/smoke/map.mjs`, then `test/smoke/ships.mjs`, then `test/smoke/maneuvers.mjs`, then `test/smoke/timeline.mjs`, then `test/smoke/usability.mjs`. Each starts Vite on port 5199
 (`SMOKE_PORT` to change it), drives the installed Google Chrome headless through
 `playwright-core`, prints a PASS/FAIL line per check, and exits non-zero on any failure. The
 shared server, browser and console watch are in `test/smoke/lib.mjs`; it always stops the server
@@ -31,6 +31,8 @@ it started.
   the typed TLI giving a Moon encounter, "Add node ▾ → at next Pe" and a circularising LOI, the
   clock pausing exactly at each node and the lunar orbit matching the prediction, the Pause on
   menu, and an over-budget plan.
+- `timeline.mjs` checks the timeline (sprint 5): the strip's glyphs, warp-to, and preview scrubbing.
+- `usability.mjs` checks the interface review (sprint 5b): the start view and hidden chrome, the spawn flash and merged label, A and Fly, focus keeping the distance, circular orbits, the inline node editor, the encounter ghost, the gizmo shrinking and hiding at small scale, Frame ▾, read-only plans, the fixed strip scale and its shading, and the frame following the active ship.
 - All of them fail on any console error, warning or failed request, except SwiftShader's "GPU stall due
   to ReadPixels" message, which the screenshots themselves cause.
 
@@ -40,7 +42,8 @@ Screenshots are written to `test/smoke/out/` (git-ignored): read them to look at
 `camera()`, `body(id)` (screen position, disc, depth), `labels()`, `orbitNormal(id)`,
 `simTime()`, `ship(id)`, `ships()`, `trajectory(id)`, `trajectoryVertices(id)`,
 `trajectoryMarkers()`, `plan(id)`, `nodeScreen(id)`, `gizmo()`, `ghost()`, `activePath()`,
-`activeShip()`, `trajectoryKey(id)`, and the `view` and `world` stores. Use it from your own Playwright scripts too.
+`activeShip()`, `trajectoryKey(id)`, `timeline()`, `preview()`, `clock()`, `frame()`, `flash()`, `fly()`,
+`encounterGhosts()`, and the `view` and `world` stores. Use it from your own Playwright scripts too.
 
 When a sprint adds something visible, add its checks to the smoke file for that area (or a new
 file using `lib.mjs`, added to the `smoke` script) rather than writing a separate driver.

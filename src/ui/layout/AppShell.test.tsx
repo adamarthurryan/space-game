@@ -90,15 +90,23 @@ describe('AppShell', () => {
     expect(within(panel).queryByText('No bodies yet.')).toBeNull();
   });
 
+  it('shows no placeholders for missing features (S5b-22)', () => {
+    render(<AppShell />);
+    expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
+    expect(screen.queryByText(/⚠|⏰/)).toBeNull();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['System', 'Fleets']);
+    expect(screen.queryByText('Filters')).toBeNull();
+  });
+
   it('moves between tabs with the arrow keys', async () => {
     const user = userEvent.setup();
     render(<AppShell />);
     await user.click(screen.getByRole('tab', { name: 'System' }));
 
     await user.keyboard('{ArrowLeft}');
-    const routes = screen.getByRole('tab', { name: 'Routes' });
-    expect(routes.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(routes);
+    const fleets = screen.getByRole('tab', { name: 'Fleets' });
+    expect(fleets.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(fleets);
 
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'System' }).getAttribute('aria-selected')).toBe('true');

@@ -8,6 +8,7 @@
 
 import type { MapObjectRef } from '../store/useView';
 import type { MapFrame, PlacedLabel, Rect } from './mapFrame';
+import { occludedAt } from './occlusion';
 
 export type { PlacedLabel, Rect };
 
@@ -42,7 +43,7 @@ export function pick(
   for (let k = 0; k < fs.ids.length; k++) {
     if (!fs.markerShown[k]) continue;
     const d = Math.hypot(x - fs.screenX[k]!, y - fs.screenY[k]!);
-    if (d <= bestShipD && !behindDisc(frame, fs.screenX[k]!, fs.screenY[k]!, fs.depth[k]!)) {
+    if (d <= bestShipD && !occludedAt(frame, fs.screenX[k]!, fs.screenY[k]!, fs.depth[k]!)) {
       bestShipD = d;
       bestShip = k;
     }
@@ -75,13 +76,4 @@ export function pick(
     }
   }
   return best >= 0 ? { kind: 'body', id: frame.order[best]! } : null;
-}
-
-/** Whether a point at (x, y) and `depth` is behind a nearer drawn disc. */
-function behindDisc(frame: MapFrame, x: number, y: number, depth: number): boolean {
-  for (let i = 0; i < frame.order.length; i++) {
-    if (!frame.sphereShown[i] || !(frame.depth[i]! < depth)) continue;
-    if (Math.hypot(x - frame.screenX[i]!, y - frame.screenY[i]!) < frame.discPx[i]!) return true;
-  }
-  return false;
 }

@@ -8,18 +8,20 @@
 
 import { ACESFilmicToneMapping, Color, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import type { World } from '../sim/world';
-import { resolveActiveShip, useView } from '../store/useView';
+import { FLASH_MS, resolveActiveShip, useView } from '../store/useView';
 import { useWorld } from '../store/useWorld';
 import { CameraStage } from './camera/CameraStage';
+import { FOV_DEG } from './camera/framing';
 import { registerDebug } from './debugHandle';
 import { attachCameraInput } from './input/cameraInput';
 import { attachPointerInput } from './input/pointerInput';
 import { BodyLayer } from './layers/BodyLayer';
+import { EncounterGhostLayer } from './layers/EncounterGhostLayer';
 import { MarkerLayer } from './layers/MarkerLayer';
 import { NodeGizmo } from './NodeGizmo';
 import { OrbitLayer } from './layers/OrbitLayer';
 import { TrajectoryLayer } from './layers/TrajectoryLayer';
-import { frameBodyOf, type MapFrame } from './mapFrame';
+import { resolveFrameBody, type MapFrame } from './mapFrame';
 import { previewCaughtUp, viewTime } from './previewTime';
 import type { LabelRegistry } from './overlays/labelLayout';
 import type { TrajectoryMarkerRegistry } from './overlays/trajectoryMarkerLayout';
@@ -38,7 +40,6 @@ import {
 /** Fixed clip planes, km, with a logarithmic depth buffer (S2-5). */
 const NEAR = 1e-3;
 const FAR = 1e12;
-const FOV_DEG = 50;
 const BACKGROUND = '#05060a';
 /** The drawing buffer's pixel ratio is capped, as R3F's default was. */
 const MAX_PIXEL_RATIO = 2;
@@ -92,6 +93,7 @@ export class MapRenderer {
       new BodyLayer(this.scene, frame, world.system),
       new OrbitLayer(this.scene, frame, world.system),
       trajectories,
+      new EncounterGhostLayer(this.scene),
       new MarkerLayer(this.scene, frame, world.system),
       this.gizmo,
     ];
@@ -160,14 +162,16 @@ export class MapRenderer {
 
   /** The view for this frame, at the time the map is drawn at (S5-10). */
   private readView(world: World): ViewSnapshot {
-    const { focus, selected, hovered, activeShipId, preview } = useView.getState();
+    const { focus, frame, selected, hovered, activeShipId, preview, flash } = useView.getState();
+    const left = flash ? flash.until - performance.now() : 0;
     return {
       focus,
       selected,
       hovered,
-      frameBodyId: frameBodyOf(world, focus, viewTime(world.clock.t, preview)),
+      frameBodyId: resolveFrameBody(world, frame, viewTime(world.clock.t, preview)),
       activeShipId: resolveActiveShip(world, activeShipId),
       previewing: preview !== null,
+      flash: flash && left > 0 ? { ref: flash.ref, elapsed: (FLASH_MS - left) / 1000 } : null,
     };
   }
 

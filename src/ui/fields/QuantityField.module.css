@@ -1,8 +1,6 @@
 .field label {
   display: grid;
-  grid-template-columns: 1fr 9.5em;
-  gap: 8px;
-  align-items: center;
+  gap: 2px;
 }
 
 .label {
@@ -17,7 +15,10 @@
   background: var(--color-panel);
   color: inherit;
   font-family: var(--font-mono);
-  text-align: right;
+}
+
+.input:disabled {
+  color: var(--color-text-dim);
 }
 
 .input[aria-invalid] {

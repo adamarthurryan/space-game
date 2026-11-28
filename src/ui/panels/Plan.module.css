@@ -112,19 +112,33 @@
   background: var(--color-panel-raised);
 }
 
+.expanded {
+  margin: 2px 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.expanded > .editor {
+  padding: 4px 4px 0 12px;
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .menu {
-  position: relative;
   margin-top: 4px;
 }
 
 .popover {
+  min-width: 14em;
+}
+
+.menuItems {
   display: grid;
   gap: 2px;
-  margin-top: 2px;
   padding: 4px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-panel-raised);
 }
 
 .popover button {
@@ -133,6 +147,16 @@
   background: none;
   text-align: left;
   cursor: pointer;
+}
+
+.popover button:disabled {
+  color: var(--color-text-dim);
+  cursor: default;
+}
+
+.reason {
+  margin-left: 8px;
+  font-size: 11px;
 }
 
 .popover input {

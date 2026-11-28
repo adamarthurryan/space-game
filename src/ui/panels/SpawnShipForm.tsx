@@ -70,7 +70,7 @@ function fieldsFromInput(f: Fields, input: OrbitInput): Fields {
  */
 export function SpawnShipForm() {
   const system = useWorld((s) => s.world.system);
-  const { setSpawnFormOpen, select } = useView.getState();
+  const { setSpawnFormOpen, select, flashObject } = useView.getState();
   const [fields, setFields] = useState<Fields>(DEFAULTS);
   /** A computed state from the "To the Moon" preset, used until a field is edited. */
   const [override, setOverride] = useState<OrbitState | null>(null);
@@ -159,7 +159,9 @@ export function SpawnShipForm() {
       setError(result.error);
       return;
     }
+    // Selected and flashed, so it can be found; not focused or flown (S5b-6, S5b-11).
     select({ kind: 'ship', id: result.value });
+    flashObject({ kind: 'ship', id: result.value });
     setSpawnFormOpen(false);
   }
 

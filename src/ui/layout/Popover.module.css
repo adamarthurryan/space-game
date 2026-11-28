@@ -1,0 +1,28 @@
+.popover {
+  position: relative;
+}
+
+.panel {
+  position: absolute;
+  z-index: 20;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-panel-raised);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+}
+
+.panel[data-side='below'] {
+  top: calc(100% + 2px);
+}
+
+.panel[data-side='above'] {
+  bottom: calc(100% + 2px);
+}
+
+.panel[data-align='start'] {
+  left: 0;
+}
+
+.panel[data-align='end'] {
+  right: 0;
+}
